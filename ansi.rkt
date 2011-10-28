@@ -192,6 +192,7 @@
 (define-escape-sequence (dec-save-cursor) "\0337")
 (define-escape-sequence (dec-restore-cursor) "\0338")
 
+(define-escape-sequence (dec-reset-margins) CSI "r")
 (define-escape-sequence (dec-set-margins top-row bottom-row) CSI top-row ";" bottom-row "r")
 
 ;; dec-set-left-right-margins is apparently for VT400 and printers only:
