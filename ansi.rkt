@@ -218,6 +218,8 @@
 ;; xterm sequences
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define-escape-sequence (xterm-full-reset) "\033c") ;; DEC also?
+
 (define (xterm-set-icon-name-and-window-title text)
   (string-append OSC "0;" text ST))
 (define (xterm-set-icon-name text)
