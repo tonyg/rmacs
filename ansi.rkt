@@ -5,6 +5,8 @@
 ;; but it doesn't have very many definitions; this page, however, is
 ;; comprehensive and excellent:
 ;; http://bjh21.me.uk/all-escapes/all-escapes.txt
+;;
+;; See also http://www.xfree86.org/current/ctlseqs.html
 
 ;; Doesn't cover the many interesting modes, which presumably
 ;; contributed to cooked/raw distinction and which can also be used to
