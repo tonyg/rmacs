@@ -2,7 +2,9 @@
 
 (require "ansi.rkt")
 
-(for-each display (list (select-graphic-rendition style-bold
+(for-each display (list (dec-soft-terminal-reset)
+
+			(select-graphic-rendition style-bold
 						  (style-text-color color-yellow)
 						  (style-background-color color-blue))
 			(clear-screen/home)
@@ -31,5 +33,6 @@
 			(goto-column 2)
 			(delete-characters 1)
 			(select-graphic-rendition)
+
 			(goto 19 1)))
 
