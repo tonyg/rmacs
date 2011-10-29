@@ -8,10 +8,6 @@
 ;;
 ;; See also http://www.xfree86.org/current/ctlseqs.html
 
-;; Doesn't cover the many interesting modes, which presumably
-;; contributed to cooked/raw distinction and which can also be used to
-;; configure various kinds of mouse ("locator") interaction etc.
-
 (provide (except-out (all-defined-out)
 		     CSI
 		     ST
@@ -339,6 +335,107 @@
 (define effect-undefined 0)
 (define effect-update-presentation-from-data 1)
 (define effect-update-data-from-presentation 2)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Modes (for set-mode and reset-mode)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Note that for some of the non-standard modes, the codes
+;; conflict. See, for example, "?9", which controls interlace-mode for
+;; DEC and X10 mouse-reporting for xterms.
+
+;; Standard modes
+
+(define guarded-area-transfer-mode "1")
+(define keyboard-action-mode "2")
+(define control-representation-mode "3")
+(define insertion-replacement-mode "4")
+(define status-report-transfer-mode "5")
+(define erasure-mode "6")
+(define line-editing-mode "7")
+(define bi-directional-support-mode "8")
+(define device-component-select-mode "9")
+(define character-editing-mode "10")
+(define positioning-unit-mode "11") ;; deprecated
+(define send/receive-mode "12")
+(define format-effector-action-mode "13")
+(define format-effector-transfer-mode "14")
+(define multiple-area-transfer-mode "15")
+(define transfer-termination-mode "16")
+(define selected-area-transfer-mode "17")
+(define tabulation-stop-mode "18")
+(define editing-boundary-mode "19") ;; obsolete
+(define line-feed/new-line-mode "20") ;; obsolete
+(define graphic-rendition-combination-mode "21")
+(define zero-default-mode "22") ;; deprecated
+
+;; dec
+(define ansi/vt52-mode "?2")
+(define column-mode "?3")
+(define scrolling-mode "?4")
+(define screen-mode "?5")
+(define origin-mode "?6")
+(define autowrap-mode "?7")
+(define auto-repeat-mode "?8")
+(define interlace-mode "?9")
+(define editing-mode "?10")
+(define line-transmit-mode "?11")
+(define space-compression/field-delimiter-mode "?13")
+(define transmit-execution-mode "?14")
+(define edit-key-execution-mode "?16")
+(define print-form-feed-mode "?18")
+(define printer-extent-mode "?19")
+(define print-density-mode "?24")
+(define text-cursor-enable-mode "?25")
+(define proportional-spacing-mode "?27")
+(define pitch-select-mode "?29")
+(define right-to-left-writing-direction-mode "?34")
+(define hebrew-encoding-mode "?36")
+(define tek-graphics-mode "?38")
+(define carriage-return/new-line-mode "?40")
+(define non-bidirectional-print-direction-mode "?41")
+(define nat-repl-char "?42") ;; no idea what this might mean
+(define expanded/compressed-print-mode "?43")
+(define print-color/black-and-white-mode "?44")
+(define rgb/hls-print-color-syntax-mode "?45")
+(define graphics-print-background-mode "?46")
+(define print-rotated/compressed-mode "?47")
+(define black/white-reversal-mode "?51")
+(define origin-placement-mode "?52")
+(define bold-page-mode "?55")
+(define horizontal-cursor-coupling-mode "?60")
+(define vertical-cursor-coupling-mode "?61")
+(define page-cursor-coupling-mode "?64")
+(define numeric-keypad-mode "?66")
+(define backspace/delete-mode "?67")
+(define typewriter-mode "?68")
+(define sixel-scrolling-mode "?80")
+
+;; xterm
+(define x10-mouse-reporting-mode "?9")
+(define column-switch-enabled-mode "?40")
+(define more-fix-mode "?41")
+(define margin-bell-mode "?44")
+(define reverse-wraparound-mode "?45")
+(define logging-mode "?46")
+(define alternate-screen-mode "?47")
+(define x11-normal-mouse-tracking-mode "?1000")
+(define x11-hilite-mouse-tracking-mode "?1001")
+(define x11-button-event-mouse-tracking-mode "?1002")
+(define x11-any-event-mouse-tracking-mode "?1003")
+(define alternate-screen-buffer-mode "?1047")
+(define save/restore-cursor-pseudomode "?1048")
+(define save/restore-cursor-and-alternate-screen-buffer-pseudomode "?1049")
+(define sun-function-key-mode "?1051")
+(define hp-function-key-mode "?1052")
+(define sun/pc-keyboard-mode "?1061")
+
+;; rxvt (presumably supported also by (modern) xterms?)
+(define scroll-bar-mode "?30")
+(define shifted-key-functions-mode "?35")
+(define scroll-to-bottom-on-tty-output-mode "?1010")
+(define scroll-to-bottom-on-key-press-mode "?1011")
+(define special-modifiers-mode "?1035")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Derived sequences
