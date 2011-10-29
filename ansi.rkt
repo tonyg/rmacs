@@ -16,6 +16,7 @@
 		     CSI
 		     ST
 		     OSC
+		     format-parameter
 		     define-variable-arity-escape-sequence
 		     define-escape-sequence))
 
@@ -23,9 +24,15 @@
 (define ST  "\033\\")
 (define OSC "\033]")
 
+(define (format-parameter v)
+  (cond
+   ((number? v) (number->string v))
+   ((string? v) v)
+   (else (error 'format-parameter "ANSI parameters must be either strings or numbers; got ~v" v))))
+
 (define-syntax-rule (define-escape-sequence (name arg ...) piece ...)
   (define (name arg ...)
-    (let ((arg (number->string arg)) ...)
+    (let ((arg (format-parameter arg)) ...)
       (string-append piece ...))))
 
 (define-syntax-rule (define-variable-arity-escape-sequence (name args) piece ...)
@@ -33,9 +40,9 @@
     (if (null? args)
 	(let ((args ""))
 	  (string-append piece ...))
-	(let ((args (string-append (number->string (car args))
+	(let ((args (string-append (format-parameter (car args))
 				   (foldr (lambda (n acc)
-					    (string-append ";" (number->string n) acc))
+					    (string-append ";" (format-parameter n) acc))
 					  ""
 					  (cdr args)))))
 	  (string-append piece ...)))))
