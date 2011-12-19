@@ -5,6 +5,15 @@
 
 (define (main)
   (tty-raw!)
+
+  (define old-exit-handler (exit-handler))
+  (exit-handler (lambda (v)
+		  (display (reset-mode x11-any-event-mouse-tracking-mode))
+		  (old-exit-handler v)))
+
+  (for-each display (list (set-mode x11-any-event-mouse-tracking-mode)))
+  (flush-output)
+
   (let loop ()
     (define ch (read-byte))
     (display (select-graphic-rendition ch))
