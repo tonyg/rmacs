@@ -18,7 +18,7 @@
     (define ch (read-byte))
     (display (select-graphic-rendition ch))
     (display (clear-to-eol))
-    (printf "Byte: ~v\015\012" ch)
+    (printf "Byte: ~v ~s\015\012" ch (integer->char ch))
     (display (select-graphic-rendition))
     ;;(flush-output)
     (if (member ch '(4 8 127)) ;; EOF, C-h, DEL
