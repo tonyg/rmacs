@@ -1,0 +1,1840 @@
+ Controlling "xterm" emulations
+
+ (and similar software under X: decterm, hpterm, dtterm, etc.)
+
+ The "xterm" application, which runs in the graphical X Windows
+ environment and emulates a character-cell terminal.
+
+ *---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*
+
+Date: 12 Sep 1989  17:44:43 GMT
+Organization: GE Corporate Research & Development, Schenectady, NY
+To: xpert@expo.lcs.mit.edu
+From: crdgw1!montnaro@uunet.uu.net  (Skip Montanaro)
+Subject: XTerm Escape Sequences (X11 Version)
+
+I rummaged around through the xterm code and came up with the following
+stuff. No guarantees. I'm headed out of town for a couple days and thought
+it better to get it out than let it get stale. Comments, bugs, and other
+notes are welcome. Somebody else can convert it to troff. I prefer LaTeX.
+:-) I will try and get to the Tek mode stuff when I return, although I doubt
+it's changed much from X10 XTerm.
+
+I gleaned the basic stuff out of the charproc.c code, by hacking VTparse()
+so it spit out leaves of the parse tree. I was mildly surprised to see
+things like "ESC # BEL" turn up.
+
+For most folks, the most interesting stuff will probably be "ESC ] Ps ND
+string NP" down near the bottom. That's what you use to change the icon and
+window labels, and the log file name. Most other things appear the same as
+the X10 documentation, although a few DEC-ish mode parameters (42, 43, 48, &
+49) seem to have disappeared.
+
+------------------------------------------------------------------------------
+BEL		Bell (Ctrl-G)
+BS		Backspace (Ctrl-H)
+HT		Horizontal Tab (Ctrl-I)
+NL		Line Feed or New Line (Ctrl-J)
+VT		Vertical Tab (Ctrl-K)
+NP		Form Feed or New Page (Ctrl-L)
+CR		Carriage Return (Ctrl-M)
+SO		Shift Out (Ctrl-N) -> Switch to Alternate Character Set
+SI		Shift In (Ctrl-O) -> Switch to Standard Character Set
+ESC BEL		(Same as non-escaped BEL)
+ESC BS		(Same as non-escaped BS)
+ESC HT		(Same as non-escaped HT)
+ESC NL		(Same as non-escaped NL)
+ESC VT		(Same as non-escaped VT)
+ESC NP		(Same as non-escaped NP)
+ESC CR		(Same as non-escaped CR)
+ESC SO		(Same as non-escaped SO)
+ESC SI		(Same as non-escaped SI)
+ESC # BEL	(Same as non-escaped BEL)
+ESC # BS	(Same as non-escaped BS)
+ESC # HT	(Same as non-escaped HT)
+ESC # NL	(Same as non-escaped NL)
+ESC # VT	(Same as non-escaped VT)
+ESC # NP	(Same as non-escaped NP)
+ESC # CR	(Same as non-escaped CR)
+ESC # SO	(Same as non-escaped SO)
+ESC # SI	(Same as non-escaped SI)
+ESC # 8		DEC Screen Alignment Test (DECALN)
+ESC ( BEL	(Same as non-escaped BEL)
+ESC ( BS	(Same as non-escaped BS)
+ESC ( HT	(Same as non-escaped HT)
+ESC ( NL	(Same as non-escaped NL)
+ESC ( VT	(Same as non-escaped VT)
+ESC ( NP	(Same as non-escaped NP)
+ESC ( CR	(Same as non-escaped CR)
+ESC ( SO	(Same as non-escaped SO)
+ESC ( SI	(Same as non-escaped SI)
+ESC ( C		Select G0 Character Set (SCS)
+		C = 0 -> Special Character and Line Drawing Set
+		C = 1 -> Alternate Character ROM Standard Set
+		C = 2 -> Alternate Character ROM Special Set
+		C = A -> United Kingdom (UK)
+		C = B -> United States (USASCII)
+ESC ) C		Select G1 Character Set (SCS)
+		C takes same values as above
+ESC * C		Select G2 Character Set (SCS)
+		C takes same values as above
+ESC + C		Select G3 Character Set (SCS)
+		C takes same values as above
+ESC 7		Save Cursor (DECSC)
+ESC 8		Restore Cursor (DECRC)
+ESC =		Application Keypad (DECPAM)
+ESC >		Normal Keypad (DECNM)
+ESC D		Index (IND)
+ESC E		Next Line (NEL)
+ESC H		Tab Set (HTS)
+ESC M		Reverse Index (RI)
+ESC N		Single Shift Select of G2 Character Set (SS2)
+ESC O		Single Shift Select of G3 Character Set (SS3)
+ESC [ BEL	(Same as non-escaped BEL)
+ESC [ BS	(Same as non-escaped BS)
+ESC [ HT	(Same as non-escaped HT)
+ESC [ NL	(Same as non-escaped NL)
+ESC [ VT	(Same as non-escaped VT)
+ESC [ NP	(Same as non-escaped NP)
+ESC [ CR	(Same as non-escaped CR)
+ESC [ SO	(Same as non-escaped SO)
+ESC [ SI	(Same as non-escaped SI)
+ESC [ ? BEL	(Same as non-escaped BEL)
+ESC [ ? BS	(Same as non-escaped BS)
+ESC [ ? HT	(Same as non-escaped HT)
+ESC [ ? NL	(Same as non-escaped NL)
+ESC [ ? VT	(Same as non-escaped VT)
+ESC [ ? NP	(Same as non-escaped NP)
+ESC [ ? CR	(Same as non-escaped CR)
+ESC [ ? SO	(Same as non-escaped SO)
+ESC [ ? SI	(Same as non-escaped SI)
+ESC [ ? Ps h	DEC Private Mode Set (DECSET)
+		Ps = 1 -> Application Cursor Keys (DECCKM)
+		Ps = 2 -> Set VT52 Mode
+		Ps = 3 -> 132 Column Mode (DECCOLM)
+		Ps = 4 -> Smooth (Slow) Scroll (DECSCLM)
+		Ps = 5 -> Reverse Video (DECSCNM)
+		Ps = 6 -> Origin Mode (DECOM)
+		Ps = 7 -> Wraparound Mode (DECAWM)
+		Ps = 8 -> Auto-Repeat Keys (DECARM)
+		Ps = 9 -> Send MIT Mouse Row & Column on Button
+			  Press
+		Ps = 38 -> Enter Tektronix Mode (DECTEK)
+		Ps = 40 -> Allow 80 <-> 132 Mode
+		Ps = 41 -> curses(5) fix
+		Ps = 44 -> Turn on Margin Bell
+		Ps = 45 -> Reverse-wraparound Mode
+		Ps = 46 -> Start Logging
+		Ps = 47 -> Use Alternate Screen Buffer
+		Ps = 1000 -> xtem bogus sequence (???)
+		Ps = 1001 -> xtem sequence w/hilite tracking (???)
+ESC [ ? Ps l	DEC Private Mode Reset (DECRST)
+		Ps = 1 -> Normal Cursor Keys (DECCKM)
+		Ps = 3 -> 80 Column Mode (DECCOLM)
+		Ps = 4 -> Jump (Fast) Scroll (DECSCLM)
+		Ps = 5 -> Normal Video (DECSCNM)
+		Ps = 6 -> Normal Cursor Mode (DECOM)
+		Ps = 7 -> No Wraparound Mode (DECAWM)
+		Ps = 8 -> No Auto-Repeat Keys (DECARM)
+		Ps = 9 -> Don't Send MIT Mouse Row & Column on
+			  Button Press
+		Ps = 40 -> Don't Allow 80 <-> 132 Mode
+		Ps = 41 -> No curses(5) fix
+		Ps = 44 -> Turn Off Margin Bell
+		Ps = 45 -> No Reverse-wraparound Mode
+		Ps = 46 -> Stop Logging
+		Ps = 47 -> Use Normal Screen Buffer
+		Ps = 1000 -> xtem bogus sequence (???)
+		Ps = 1001 -> xtem sequence w/hilite tracking (???)
+ESC [ ? Ps r	Restore DEC Private Mode
+		Ps = 1 -> Normal/Application Cursor Keys (DECCKM)
+		Ps = 3 -> 80/132 Column Mode (DECCOLM)
+		Ps = 4 -> Jump (Fast)/Smooth (Slow) Scroll (DECSCLM)
+		Ps = 5 -> Normal/Reverse Video (DECSCNM)
+		Ps = 6 -> Normal/Origin  Cursor Mode (DECOM)
+		Ps = 7 -> No Wraparound/Wraparound Mode (DECAWM)
+		Ps = 8 -> Auto-repeat/No Auto-repeat Keys (DECARM)
+		Ps = 9 -> Don't Send/Send MIT Mouse Row & Column on
+			  Button Press
+		Ps = 40 -> Disallow/Allow 80 <-> 132 Mode
+		Ps = 41 -> Off/On curses(5) fix
+		Ps = 44 -> Turn Off/On Margin Bell
+		Ps = 45 -> No Reverse-wraparound/Reverse-wraparound
+			   Mode 
+		Ps = 46 -> Stop/Start Logging
+		Ps = 47 -> Use Normal/Alternate Screen Buffer
+		Ps = 1000 -> mouse bogus sequence (???)
+		Ps = 1001 -> mouse bogus sequence (???)
+ESC [ ? Ps s	Save DEC Private Mode
+			Same P's as Restore DEC Private Mode
+ESC [ Ps @	Insert Ps (Blank) Character(s) (default = 1) (ICH)
+ESC [ Ps A	Cursor Up Ps Times (default = 1) (CUU)
+ESC [ Ps B	Cursor Down Ps Times (default = 1) (CUD)
+ESC [ Ps C	Cursor Forward Ps Times (default = 1) (CUF)
+ESC [ Ps D	Cursor Backward Ps Times (default = 1) (CUB)
+ESC [ Ps ; Ps H	Cursor Position [row;column] (default = [1,1]) (CUP)
+ESC [ Ps J	Erase in Display
+		Ps = 0 -> Clear Below (default)
+		Ps = 1 -> Clear Above
+		Ps = 2 -> Clear All
+ESC [ Ps K	Erase in Line
+		Ps = 0 -> Clear to Right (default)
+		Ps = 1 -> Clear to Left
+		Ps = 2 -> Clear All
+ESC [ Ps L	Insert Ps lines (default = 1) (IL)
+ESC [ Ps M	Delete Ps lines (default = 1) (DL)
+ESC [ Ps P	Delete Ps Characters (default = 1) (DCH)
+ESC [ T		Track Mouse (???)
+ESC [ Ps c	Device Attributes (DA1)
+ESC [ Ps ; Ps f	Cursor Position [row;column] (default = [1,1]) (HVP)
+ESC [ Ps g	Tab Clear
+		Ps = 0 -> Clear Current Column (default)
+		Ps = 3 -> Clear All
+ESC [ Ps h	Mode Set (SET)
+		Ps = 4 -> Insert Mode (IRM)
+		Ps = 20 -> Automatic Linefeed (LNM)
+ESC [ Ps l	Mode Reset (RST)
+		Ps = 4 -> Insert Mode (IRM)
+		Ps = 20 -> Automatic Linefeed (LNM)
+ESC [ Pm m	Character Attributes (SGR)
+		Ps = 0 -> Normal (default)
+		Ps = 1 -> Blink (appears as Bold)
+		Ps = 4 -> Underscore
+		Ps = 5 -> Bold
+		Ps = 7 -> Inverse
+ESC [ Ps n	Device Status Report (DSR)
+		Ps = 5 -> Status Report ESC [ 0 n -> OK
+		Ps = 6 -> Report Cursor Position (CPR) [row;column]
+			  as ESC [ r ; c R
+ESC [ Ps ; Ps r	Set Scrolling Region [top;bottom] (default = full size
+		of window) (DECSTBM)
+ESC [ Ps x	Request Terminal Parameters (DECREQTPARM)
+ESC ] Ps ND string NP		OSC Mode
+		ND can be any non-digit Character (it's discarded)
+		NP can be any non-printing Character (it's discarded)
+		string can be any ASCII printable string
+			(max 511 characters)
+		Ps = 0 -> use string as a new icon name and title
+		Ps = 1 -> use string is a new icon name only
+		Ps = 2 -> use string is a new title only
+		Ps = 46 -> use string as a new log file name
+		
+ESC c		Full Reset
+ESC n		Switch to Alternate Character Set LS2
+ESC o		Switch to Alternate Character Set LS3
+ESC |		Switch to Alternate Graphics(?) Set LS3R
+ESC }		Switch to Alternate Graphics(?) Set LS2R
+ESC ~		Switch to Alternate Graphics(?) Set LS1R
+--
+Skip Montanaro (montanaro@crdgw1.ge.com)
+
+ *---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*
+
+Newsgroups: comp.terminals
+Path: cs.utk.edu!emory!swrinde!zaphod.mps.ohio-state.edu!howland.reston.ans.net
+      !spool.mu.edu!hri.com!noc.near.net!news.bbn.com!bbn.com!pdsmith
+Message-ID: <lmimq1INNgd6@news.bbn.com>
+References: <1993Jan28.010333.2187@spang.Camosun.BC.CA>
+Date: 29 Jan 1993 16:28:49 GMT
+From: pdsmith@bbn.com (Peter D. Smith)
+Subject: Re: Can you identify this escape sequence?
+Summary: DECELR and DECSLE
+
+In article <1993Jan28.010333.2187@spang.Camosun.BC.CA>,
+ morley@suncad.camosun.bc.ca (Mark Morley) writes:
+>
+> The escape sequence is <ESC>[1;1'z
+>                     or <ESC>[1;1'{
+
+Sure -- looking it up in my Escape sequence reverse index, I find
+
+	...z is DECELR: Enable locator report.  It's only used by DECTERM;
+		see the Decterm programming release notes (EK-DTERM-RN-001)
+		page 3-1.  The first one means 'enable' and the second
+		one means 'report in pixels'.
+
+		The 'locator' is the mouse.
+
+	...{ is DECSLE: Select type of locator events, same book, page 3-5.
+		It's not clear why there are two parameters; this
+		sequence doesn't attach any positional significance
+		on parameters (eg, a one means the same thing no matter
+		where it is).  One means "Report button down".
+
+
+					Peter D. Smith
+
+ *---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*
+
+Newsgroups: comp.os.vms
+Path: cs.utk.edu!emory!wupost!uunet!pipex!sunic!ugle.unit.no!alf.uib.no
+      !dsfys1.fi.uib.no!iversen
+From: iversen@dsfys1.fi.uib.no (Per Steinar Iversen)
+Subject: RE: <ESC>]VMS;2<ESC>\ sequence in Device Control Reset Modules
+Message-ID: <1993Mar4.071327.17421@alf.uib.no>
+Sender: iversen@vsfys1.fi.uib.no (Per Steinar Iversen)
+Organization: Department of Physics, University of Bergen, Norway
+References:  <9303031720.AA28424@uu3.psi.com>
+Date: Thu, 4 Mar 1993 07:13:27 GMT
+
+In article <9303031720.AA28424@uu3.psi.com>,
+ Jerry Leichter <leichter@lrw.com> writes:
+>
+>OSC sequences have been used by the UIS terminal emulators to provide a means
+>for a program to control things like window sizes and positions through the
+>data stream; the DECWindows terminal emulator inherited them.  A few OSC
+>sequences have been used in the standard print symbiont as well.  I KNOW I
+>found the documentation for them once, but a search through the VMS docs just
+>now revealed nothing.  I do recall that the OSC sequences didn't do much that
+>was very interesting.  If anyone can find where this stuff is described, I'd
+>be interested.
+
+The UIS OSC sequences are documented in the VWS User's Guide, "Additional 
+Features of the VT220 Terminal Emulator". I have found the related "Control
+Sequence Introducer Strings" useful to set terminal window sizes, if one logs
+in on a remote node through DECnet or TELNET, then a terminal resize with
+SET TERM does not propagate back to my DECwindows window. By having a command
+file on the remote node one can fix this:
+
+$! BIG.COM
+$ set term/page=60/width=132
+$ write sys$output "<ESC>[?3h<ESC>[60t<ESC>>"
+
+(Subsitute real <ESC>s with an editor.)
+
+It would be nice though if DEC would document DECterm better...
+
++-----------------------------------------------------------------------------+
+! Per Steinar Iversen    ! Internet:     iversen@vsfys1.fi.uib.no             !
+! Fysisk Institutt       ! BITnet:       iversen@cernvm.bitnet                !
+! Universitetet i Bergen ! HEPnet:       VSFYS::IVERSEN (VSFYS=21.341=21845)  !
+! Allegaten 55           ! Phone:       +47 5212770                           !
+! N-5007 Bergen          ! Fax:         +47 5318334                           !
+! NORWAY                 !                                                    !
++-----------------------------------------------------------------------------+
+
+
+ *---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*
+
+From the HP-UX FAQ:
+
+Subject: 6.3  How do I get a scroll bar on hpterms?
+
+Set the following resources:
+
+HPterm*scrollBar:       TRUE
+HPterm*saveLines:       1024
+
+or some other other arbitrarily large number.  To do this interactively, use
+"hpterm -sb -sl 1024". You can also set these in an app-default file
+(/usr/lib/X11/app-defaults/HPterm). You can also set saveLines to something
+like "4s", which indicates four screens.
+
+If you want the VUE panel terminal icon produce hpterm's that have
+scroll bars, and also have their login shell run at the startup of
+the terminal.  To do this you have to modify the default action of the
+VUE panel.  The easiest way to do this on a system-wide basis is
+to edit the "/usr/vue/types/xclients.vf" file. Change the line that says
+"hpterm" to "hpterm -ls -sb -sl 400":
+
+/usr/vue/types/xclients.vf
+
+ACTION Hpterm
+        TYPE            COMMAND
+        WINDOW-TYPE     NO-STDIO
+        EXEC-STRING     hpterm -ls -sb -sl 400
+        DESCRIPTION     The Hpterm action starts an hpterm terminal
+                        emulator.
+END
+
+(Thanks to Greg Cagle <gcagle@hpupora.nsr.hp.com> and
+           John Kemp  <JohnKemp@uiuc.edu> )
+
+
+ ......... ......... ......... ......... ......... ......... ......... .......
+
+The HP-UX Frequently Asked Questions compilation, which includes several
+other 'hpterm' items, can be read in its entirety from this URL:
+
+    http://www.cis.ohio-state.edu/hypertext/faq/usenet/hp/top.html
+
+ *---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*---*
+
+
+ //////////////////////////////////////////////////////////////////////////////
+
+From charlesp@darwin.sfbr.org Sat Feb 20 23:32:53 1999
+Date: Fri, 19 Feb 1999 00:30:05 GMT
+From: charlesp@darwin.sfbr.org
+Subject: Re: Emacs in a dtterm under 2.6 CDE
+
+In article <7a1f2i$j3c$2@callisto.clark.net>,
+  "T.E.Dickey" <dickey@shell.clark.net> wrote:
+> charlesp@darwin.sfbr.org wrote:
+> > Recently I was forced to switch from Openwindows to CDE under Solaris 2.6
+> > which features dtterm terminal windows.
+>
+> > I like to run emacs inside my terminal windows (I can C-Z to flop back from
+> > "real" shell to emacs without reaching for a mouse).  But this CDE dtterm
+> > appears to be broken.  It works for a while, but certain cursor motions
+> > (particularly going backward from the bottom of a window) screw up the
+> > display so I end up typing C-l all the time.  When the display is hosed,
+> > one symptom is that the reverse video lines near the bottom and in the
+> > middle (if you have multiple windows) go away and are replaced by some of
+> > the text you are editing.
+>
+> simple fix: remove the scrolling capabilities from the dtterm description
+> hard fix: get the vendor to correct the bug.
+>
+
+I've tried both disabling the scroll bar and both positions of the "jump
+scroll" option.  I also tried "kshMode."  Nothing solved the problem.
+
+dtterm is BROKEN.
+
+Besides, I like scrolling.  I'm now using cmdtools (which I didn't even know
+were available under CDE, but they are, at least in 2.6) and they work
+perfectly.  The version of xterm in 2.6 also works fine, but I haven't
+figured out how to get xterms to work so that when I exit out of emacs (or
+vi).  I see the previous terminal history, not just the editing session
+paritally scrolled off screen.  It is very useful to see the previous terminal
+history.  (dtterm doesn't do this the way I want either).  cmdtool does
+everything the way I want by default.
+
+
+ter fix (imho):
+> The XFree86 3.3.3 xterm supports ANSI color and VT220 emulation
+> There's an faq at
+>	[STALE URL]
+> 	http://www.clark.net/pub/dickey/xterm/xterm.faq.html
+> 	ftp://ftp.clark.net/pub/dickey/xterm
+
+	[URL functional in 2009]
+	http://invisible-island.net/xterm/xterm.faq.html
+
+> --
+> Thomas E. Dickey
+> dickey@clark.net
+> http://www.clark.net/pub/dickey
+>
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals
+Date: 19 Feb 1999 17:11:38 GMT
+From: T.E.Dickey <dickey@shell.clark.net>
+Subject: Re: Emacs in a dtterm under 2.6 CDE
+
+charlesp@darwin.sfbr.org wrote:
+...
+>> simple fix: remove the scrolling capabilities from the dtterm description
+>> hard fix: get the vendor to correct the bug.
+
+> I've tried both disabling the scroll bar and both positions of the "jump
+> scroll" option.  I also tried "kshMode."  Nothing solved the problem.
+
+the scrollbar has nothing to do with it.  run
+	infocmp dtterm >foo
+and remove the 'csr', 'ind', 'ri' strings.  recompile with tic.
+
+> dtterm is BROKEN.
+
+that appears correct.
+
+> Besides, I like scrolling.  I'm now using cmdtools (which I didn't even know
+> were available under CDE, but they are, at least in 2.6) and they work
+> perfectly.  The version of xterm in 2.6 also works fine, but I haven't
+> figured out how to get xterms to work so that when I exit out of emacs (or
+> vi) I see the previous terminal history, not just the editing session
+> paritally scrolled off screen.  It is very useful to see the previous terminal
+> history.  (dtterm doesn't do this the way I want either).  cmdtool does
+
+dtterm doesn't do it at all.  you are describing the alternate screen feature
+of xterm (half of the users dislike it, half like it).  still - in my faq.
+
+-- 
+Thomas E. Dickey
+dickey@clark.net
+
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.unix.aix,comp.windows.x
+Message-ID: <6pouaa$20p$1@usenet50.supernews.com>
+Date: Thu, 30 Jul 1998 00:51:05 -0400
+From: "M. Kovarski" <markk@openetix.com>
+Subject: CATIA on X-Terminal
+
+
+Anyone here using CATIA on an X-Terminal? If so, which on. We tried the IBM
+Network Station 1000 and it does not seem to work. The colors are funny. I
+think it is because the Netstation has only 256 colors!?!?
+
+The server which runs the CATIA is an F50 with an GXT800P running in OpenGL
+mode. I have not tried Pex/Phigs yet. CATIA uses 16 Million colors as far as
+I can tell.
+
+Any other 24-Bit color X-Terminals out there by other companies? Any
+recommendations or warnings?
+
+CATIA is a strange app since it uses some weird colormap scheme. I get
+exactly the same problem when running CATIA on Hummingbird, WRQs and others.
+The colors are weird. Hummingbird came to the conclusion that catia uses 4
+or so colormaps and the PC can handle on 2. Anyone any ideas?
+
+Thanks and best regards,
+Mark K.
+markk@openetix.com
+
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.unix.aix,comp.windows.x
+Message-ID: <35C13398.67AB81A6@ma.ultranet.com>
+References: <6pouaa$20p$1@usenet50.supernews.com>
+            <35C13462.E55D6291@ma.ultranet.com>
+Date: Thu, 30 Jul 1998 23:01:44 -0400
+From: Chuck Kuhlman <ckuhlman@ma.ultranet.com>
+Subject: Re: CATIA on X-Terminal
+
+
+inadviseable
+
+you'll get ...poor performance and network saturation.  If you can
+even get it to work at all.
+
+Best to stay with the explicit hardware configs set up for you at the
+Dassault/IBM CASIL web site and NOT cheap out on sub-standard kludges.
+
+CATIA belongs to Dassault Aerospace (France) who have a very close
+relationship with IBM to run CATIA on RS/6000 and OS/390.
+
+
+
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.unix.solaris
+References: <374149b0.9183139@news.esat.net>
+    <wtzyaimwpid.fsf@wurzelausix.cs.uni-sb.de> <1riu9q7byu.fsf@haey.ifi.uio.no>
+    <7hu486$j6i$1@ash.prod.itd.earthlink.net> <1rn1z15fxn.fsf@haey.ifi.uio.no>
+    <7i5bsg$ulv$1@nnrp1.deja.com>
+Message-ID: <3Ky13.621$Rl3.23904@ord-read.news.verio.net>
+Date: Sat, 22 May 1999 13:58:23 GMT
+NNTP-Posting-Host: 168.143.0.8
+From: "T.E.Dickey" <dickey@shell.clark.net>
+Subject: Re: Colour Xterm?
+
+olefevre@my-dejanews.com wrote:
+> Kjetil Torgrim Homme <kjetilho@haey.ifi.uio.no> wrote:
+
+> Also, xterm compiled in a snap on this Solaris 2.5.1 system and all
+> tests in xterm-103/vttests seem to work. However, I'm not getting any
+> color with, e.g., man. I set XTerm*customization in ~/.Xdefaults to
+
+'man' doesn't do color in any version I've seen.  You can setup XFree86
+xterm to apply specified colors to bold and underlined text.
+
+> -color and my XUSERetc starts with the path to XTerm-color file yet
+> truss tells me it is not read (Xterm is, though). Why? Anyway, even
+
+If you have
+
+*customization: color
+
+in your .Xdefaults, it should read the XTerm-color file _if_ app-defaults
+aren't overridden by xrdb or some environment variable such as XENVIRONMENT
+or XAPPLRESDIR.
+
+> instructions in my XTerm seem ignored because, e.g., I can change the
+> cursor color in .Xdefaults but not in XTerm. But then even setting
+> XTerm*VT100*colorMode to on in .Xdefaults does not get me color.
+
+> At this point I'm giving up. Can someone tell me what is wrong and how
+> to get color at last?
+
+> Thanks a lot,
+
+> -- O.L.
+
+--
+Thomas E. Dickey
+dickey@clark.net
+http://invisible-island.net/
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Path: !cambridge1-snf1.gtei.net!news.gtei.net!bos-service1.ext.raytheon.com
+      !cyclone.swbell.net!newsfeed.berkeley.edu!newsfeed.nyu.edu
+      !wesley.videotron.net!wagner.videotron.net.POSTED!ocurtin
+NNTP-Posting-Host: 24.200.125.165
+Organization: The Minetown Digger
+Reply-To: ocurtin@NOSPAM.usa.net
+Message-ID: <slrn8c06up.tai.ocurtin@jarod.oc>
+Date: Fri, 3 Mar 2000 15:08:59 -0500
+From: ocurtin@usa.net (Curly++)
+Subject: Escape sequences for xterm?
+
+I think what I need is a listing of xterm escape codes.  All the 
+listings I've found are horribly out of date. 
+
+I've done a few extensive web crawls but haven't been able to 
+find anything up-to-date except the source code... yeah, I know, 
+but it's self-documenting!
+
+
+Maybe I'm going about this all wrong, so let me tell you what I'm 
+doing, you can tell me if I'm stupidly ignoring an obvious and 
+simple solution.
+
+I'm fiddling with the source for xterm.  I need to monitor the 
+user's interaction with some applications so as to divert some 
+of the inputs to another app.  Legacy stuff, this is a kludge 
+to bridge the old and the new until the old can be fully phased 
+out.  I'm writing scripts with `expect` to wait for the user 
+to fill in a form, then take an image of the screen and pass it 
+to another app.  I can't capture the data coming back, the 
+screen is updated in tiny bits sort-of like what curses does. 
+
+I've added an escape sequence to xterm so the expect script can 
+be triggered by the few predictable strings and use `send_user` 
+to trigger a screen dump to an external file.  I'd like to use a 
+"correct" sequence and submit this as a patch to the xterm 
+maintainer.  This seems to me a general solution to a set of 
+problems that turn up occassionaly. 
+
+
+-- 
+Oisin  "Curly++"  Curtin                     ocurtin@SPAM.usa.net
+Surface Liaison, Minetown Digger                    Send no SPAM.
+                                http://pages.infinit.net/curlypp/
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Organization: [posted via] Leibniz-Rechenzentrum, Muenchen (Germany)
+Message-ID: <slrn8c0cuj.f5a.m.ramsch@galadriel.forwiss.uni-passau.de>
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+Date: 3 Mar 2000 22:51:21 +0100
+From: m.ramsch@computer.org (Martin Ramsch)
+Subject: Re: Escape sequences for xterm?
+
+On Fri, 3 Mar 2000 15:08:59 -0500,
+Oisin "Curly++" Curtin <ocurtin@NOSPAM.usa.net> wrote:
+> I think what I need is a listing of xterm escape codes.  All the
+> listings I've found are horribly out of date.
+
+Did you also have a look at the file "ctlseqs.ms" which is part of
+every xterm packages?
+
+To convert this file into other formats use for example
+  groff -ms -t -Tps ctlseqs.ms >ctlseqs.ps       for Postscript output
+  groff -ms -t -Tlj4 ctlseqs.ms >ctlseqs.lj4     for LaserJet 4 print file
+  groff -ms -t -Tdvi ctlseqs.ms >ctlseqs.dvi     for TeX dvi output
+  groff -ms -t -Tlatin1 ctlseqs.ms >ctlseqs.txt  for text output
+
+Regards,
+  Martin
+-- 
+Martin Ramsch <m.ramsch@computer.org> <URL: http://home.pages.de/~ramsch/ >
+PGP KeyID=0xE8EF4F75 FiPr=5244 5EF3 B0B1 3826  E4EC 8058 7B31 3AD7
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <slrn8c0cuj.f5a.m.ramsch@galadriel.forwiss.uni-passau.de>
+Organization: Clark Internet Services, Inc., Ellicott City, MD USA
+User-Agent: tin/1.5.2-20000119 ("Sumerland") (UNIX) (SunOS/5.6 (sun4u))
+Message-ID: <kA6w4.240$G15.4993@iad-read.news.verio.net>
+Date: Sat, 04 Mar 2000 11:37:52 GMT
+From: "T.E.Dickey" <dickey@shell.clark.net>
+Subject: Re: Escape sequences for xterm?
+
+Martin Ramsch <m.ramsch@computer.org> wrote:
+> On Fri, 3 Mar 2000 15:08:59 -0500,
+> Oisin "Curly++" Curtin <ocurtin@NOSPAM.usa.net> wrote:
+>> I think what I need is a listing of xterm escape codes.  All the
+>> listings I've found are horribly out of date.
+
+> Did you also have a look at the file "ctlseqs.ms" which is part of
+> every xterm packages?
+
+
+Technically, ctlseqs.ms was moved to the doc directory tree some time
+ago - depending on how you get xterm, you may not see it - I bundle it
+in my xterm tarballs for convenience.
+
+
+The XFree86 xterm supports ANSI color and VT220 emulation
+
+There's an faq at
+	[STALE URL]
+	http://www.clark.net/pub/dickey/xterm/xterm.faq.html
+	ftp://ftp.clark.net/pub/dickey/xterm
+
+	[2009 URL]
+	http://invisible-island.net/xterm/xterm.faq.html
+
+(altavista usually shows my webpage - though I don't search for that ;-)
+
+
+	[Altavista was popular before Google saturated the search function.]
+
+
+-- 
+Thomas E. Dickey
+dickey@clark.net
+http://www.clark.net/pub/dickey
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+Message-ID: <pe9w4.255$G15.5963@iad-read.news.verio.net>
+Date: Sat, 04 Mar 2000 14:39:17 GMT
+NNTP-Posting-Date: Sat, 04 Mar 2000 14:39:17 GMT
+From: "T.E.Dickey" <dickey@shell.clark.net>
+Subject: Re: Escape sequences for xterm?
+
+Curly++ <ocurtin@nospam.usa.net> wrote:
+>
+> I've added an escape sequence to xterm so the expect script can 
+> be triggered by the few predictable strings and use `send_user` 
+> to trigger a screen dump to an external file.  I'd like to use a 
+> "correct" sequence and submit this as a patch to the xterm 
+> maintainer.  This seems to me a general solution to a set of 
+> problems that turn up occassionaly. 
+
+While it's useful, this is generally frowned upon as a security problem.
+I don't think it'll get much general acceptance.
+
+-- 
+Thomas E. Dickey
+dickey@clark.net
+http://www.clark.net/pub/dickey
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <pe9w4.255$G15.5963@iad-read.news.verio.net>
+NNTP-Posting-Host: modem-88-4-60-62.vip.uk.com
+Message-ID: <38C15701.7CF1A007@tinyworld.co.uk>
+Date: Sat, 04 Mar 2000 18:33:37 +0000
+From: Paul Williams <celigne@tinyworld.co.uk>
+Subject: Re: Escape sequences for xterm?
+
+"T.E.Dickey" wrote:
+> 
+> Curly++ <ocurtin@nospam.usa.net> wrote:
+> 
+> > I've added an escape sequence to xterm so the expect script can
+> > be triggered by the few predictable strings and use `send_user`
+> > to trigger a screen dump to an external file.  I'd like to use a
+> > "correct" sequence and submit this as a patch to the xterm
+> > maintainer.  This seems to me a general solution to a set of
+> > problems that turn up occassionaly.
+> 
+> While it's useful, this is generally frowned upon as a security problem.
+> I don't think it'll get much general acceptance.
+
+
+It is possible for a host computer to grab the contents of the screen
+of a Digital VT420. Howeve, xterm doesn't emulate a VT420 (yet?)
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <slrn8c0cuj.f5a.m.ramsch@galadriel.forwiss.uni-passau.de>
+Organization: The Minetown Digger
+Message-ID: <slrn8c5h21.4o6.ocurtin@jarod.oc>
+Date: Sun, 5 Mar 2000 15:32:03 -0500
+From: ocurtin@NOSPAM.usa.net (Curly++)
+Subject: Re: Escape sequences for xterm?
+
+On 3 Mar 2000 22:51:21 +0100, Martin Ramsch <m.ramsch@computer.org> wrote:
+>
+> On Fri, 3 Mar 2000 15:08:59 -0500,
+> Oisin "Curly++" Curtin <ocurtin@NOSPAM.usa.net> wrote:
+> > I think what I need is a listing of xterm escape codes.  All the
+> > listings I've found are horribly out of date.
+> 
+> Did you also have a look at the file "ctlseqs.ms" which is part of
+ 
+>   groff -ms -t -Tlatin1 ctlseqs.ms >ctlseqs.txt  for text output
+
+
+Ah!  Thanks, Martin.  That's the answer all right!
+
+I'm not a gruff person, er, I mean I'm not a groff person so the 
+.ms didn't mean anthing to me.  I'll suggest that your answer be 
+added to the FAQ for all us ignoramuses. :-)
+
+
+-- 
+Oisin  "Curly++"  Curtin                     ocurtin@SPAM.usa.net
+Surface Liaison, Minetown Digger                    Send no SPAM.
+                                http://pages.infinit.net/curlypp/
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+From: ocurtin@NOSPAM.usa.net (Curly++)
+Subject: Re: Escape sequences for xterm?
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <slrn8c0cuj.f5a.m.ramsch@galadriel.forwiss.uni-passau.de>
+    <kA6w4.240$G15.4993@iad-read.news.verio.net>
+Organization: The Minetown Digger
+Message-ID: <slrn8c5hge.4o6.ocurtin@jarod.oc>
+Date: Sun, 5 Mar 2000 15:39:42 -0500
+
+
+On Sat, 04 Mar 2000 11:37:52 GMT, T.E.Dickey <dickey@shell.clark.net> wrote:
+> Martin Ramsch <m.ramsch@computer.org> wrote:
+> > On Fri, 3 Mar 2000 15:08:59 -0500,
+> > Oisin "Curly++" Curtin <ocurtin@NOSPAM.usa.net> wrote:
+> >> I think what I need is a listing of xterm escape codes.  All the
+> >> listings I've found are horribly out of date.
+> 
+> > Did you also have a look at the file "ctlseqs.ms" which is part of
+> > every xterm packages?
+> 
+> Technically, ctlseqs.ms was moved to the doc directory tree some time
+> ago - depending on how you get xterm, you may not see it - I bundle it
+
+I must have an old copy then. 
+
+AFAIK, I did check the lastest FAQ at clark.  Can MR's reply be 
+added so "us unwashed masses" can cut'n'paste the right command 
+to see it?  TIA, either way. 
+
+
+-- 
+Oisin  "Curly++"  Curtin                     ocurtin@SPAM.usa.net
+Surface Liaison, Minetown Digger                    Send no SPAM.
+                                http://pages.infinit.net/curlypp/
+
+
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <pe9w4.255$G15.5963@iad-read.news.verio.net>
+Organization: The Minetown Digger
+NNTP-Posting-Host: 24.200.125.165
+Message-ID: <slrn8c5jik.4o6.ocurtin@jarod.oc>
+Date: Sun, 5 Mar 2000 16:15:02 -0500
+From: ocurtin@usa.net (Curly++)
+Subject: Re: Escape sequences for xterm?
+
+On Sat, 04 Mar 2000 14:39:17 GMT, T.E.Dickey <dickey@shell.clark.net> wrote:
+> Curly++ <ocurtin@nospam.usa.net> wrote:
+> 
+> > I've added an escape sequence to xterm so the expect script can 
+> > be triggered by the few predictable strings and use `send_user` 
+> > to trigger a screen dump to an external file.  I'd like to use a 
+> > "correct" sequence and submit this as a patch to the xterm 
+> > maintainer.  This seems to me a general solution to a set of 
+> > problems that turn up occassionaly. 
+> 
+> While it's useful, this is generally frowned upon as a security problem.
+> I don't think it'll get much general acceptance.
+
+DISCLAIMER: I'm not a security expert and I don't play one on TV.
+
+You're referring to the log problem?  I haven't read all about 
+it, but I gather it's not logging per se, but the fact that the 
+destination file is uncontrolled that causes a problem.  
+
+I plan to make screen-scraping secure by allowing the user only 
+limited control of the destination filename and ignoring the 
+request if the file already exists.  That means the screen-scrape
+will never, for example, add a line to ~/.profile.  This forces 
+the external script to delete files, but then the script needs 
+much less logic to read the image that way. 
+
+I'm not sure, but I think the solution to the logging problem is 
+similar: restrict the name and location of the file to something 
+less than anywhere/anything and use more elaborate fstat code in 
+place of the access tests.  Maybe even put a magic cookie at the 
+top of new logs and never append to an existing log if it doesn't 
+have a cookie on top.  A cookie is a lot of extra code though, I 
+wouldn't do it unless the real security experts say it's needed. 
+
+BTW, I have to add this...
+My partner is not used to seeing me grinning from ear to ear and 
+muttering under my breath "Wow!  That's neat!" and similar things. 
+This code is an absolute _pleasure_ to work with.
+
+
+-- 
+Oisin  "Curly++"  Curtin                     ocurtin@SPAM.usa.net
+Surface Liaison, Minetown Digger                    Send no SPAM.
+                                http://pages.infinit.net/curlypp/
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <pe9w4.255$G15.5963@iad-read.news.verio.net>
+    <38C15701.7CF1A007@tinyworld.co.uk>
+Organization: The Minetown Digger
+Reply-To: ocurtin@NOSPAM.usa.net
+User-Agent: slrn/0.9.5.4 (UNIX)
+Lines: 15
+Date: Sun, 5 Mar 2000 16:32:52 -0500
+From: ocurtin@NOSPAM.usa.net (Curly++)
+Subject: Re: Escape sequences for xterm?
+
+On 04 Mar 2000, Paul Williams <celigne@tinyworld.co.uk> wrote:
+ 
+> It is possible for a host computer to grab the contents of the screen
+> of a Digital VT420. Howeve, xterm doesn't emulate a VT420 (yet?)
+
+But doesn't that go back to the remote application?  I think 
+`expect` could divert the output, but having dealt with timing 
+issues before, I feel more comfortable if the data *cannot* 
+go out the wrong way no matter how hard it tries. 
+
+
+-- 
+Oisin  "Curly++"  Curtin                     ocurtin@SPAM.usa.net
+Surface Liaison, Minetown Digger                    Send no SPAM.
+                                http://pages.infinit.net/curlypp/
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <slrn8c0cuj.f5a.m.ramsch@galadriel.forwiss.uni-passau.de>
+    <kA6w4.240$G15.4993@iad-read.news.verio.net>
+    <slrn8c5hge.4o6.ocurtin@jarod.oc>
+Organization: Clark Internet Services, Inc., Ellicott City, MD USA
+Message-ID: <FtCw4.493$G15.14581@iad-read.news.verio.net>
+Date: Sun, 05 Mar 2000 23:55:17 GMT
+From: "T.E.Dickey" <dickey@shell.clark.net>
+Subject: Re: Escape sequences for xterm?
+
+Curly++ <ocurtin@nospam.usa.net> wrote:
+>> Technically, ctlseqs.ms was moved to the doc directory tree some time
+>> ago - depending on how you get xterm, you may not see it - I bundle it
+
+> I must have an old copy then. 
+
+> AFAIK, I did check the lastest FAQ at clark.  Can MR's reply be 
+> added so "us unwashed masses" can cut'n'paste the right command 
+> to see it?  TIA, either way. 
+
+maybe (I've been more busy fixing bugs in various programs recently than
+updating webpages).
+
+-- 
+Thomas E. Dickey
+dickey@clark.net
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <pe9w4.255$G15.5963@iad-read.news.verio.net>
+    <slrn8c5jik.4o6.ocurtin@jarod.oc>
+Organization: The Minetown Digger
+Message-ID: <slrn8c7r5p.7e7.ocurtin@jarod.oc>
+Date: Mon, 6 Mar 2000 12:37:00 -0500
+From: ocurtin@usa.net (Curly++)
+Subject: Re: Escape sequences for xterm?
+
+In comp.terminals, Curly++ proclaimed:
+ 
+> DISCLAIMER: I'm not a security expert and I don't play one on TV.
+
+Geez, I'll never get that TV job.  <dramatic sigh>
+
+I went back to look at Morten Welinder and Branden Robinson's 
+postings to bugtraq.  Ya now, I don't even have to think to see 
+how *machines* could get confused splitting the data stream 
+between the local screen-image and the remote host.  But Morten 
+Welinder clearly is describing the same kind of timing issue, 
+except the failure is in human ethical subroutines.  I didn't see
+it until I'd read it three times.  <sigh> Such is the life of an 
+optimist. <grin>
+
+I'm off to carefully read (at least three times!) the proposed 
+logging patch. 
+
+
+-- 
+Oisin  "Curly++"  Curtin                     ocurtin@SPAM.usa.net
+Surface Liaison, Minetown Digger                    Send no SPAM.
+                                http://pages.infinit.net/curlypp/
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Organization: Columbia University
+Message-ID: <8a1bfi$sn5$1@newsmaster.cc.columbia.edu>
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <pe9w4.255$G15.5963@iad-read.news.verio.net>
+    <slrn8c5jik.4o6.ocurtin@jarod.oc> <slrn8c7r5p.7e7.ocurtin@jarod.oc>
+Date: 6 Mar 2000 22:29:06 GMT
+From: Jeffrey Altman <jaltman@watsun.cc.columbia.edu> 
+Subject: Re: Escape sequences for xterm?
+
+In article <slrn8c7r5p.7e7.ocurtin@jarod.oc>,
+Curly++ <ocurtin@NOSPAM.usa.net> wrote:
+: In comp.terminals, Curly++ proclaimed:
+:  
+: > DISCLAIMER: I'm not a security expert and I don't play one on TV.
+: 
+: Geez, I'll never get that TV job.  <dramatic sigh>
+: 
+: I went back to look at Morten Welinder and Branden Robinson's 
+: postings to bugtraq.  Ya now, I don't even have to think to see 
+: how *machines* could get confused splitting the data stream 
+: between the local screen-image and the remote host.  But Morten 
+: Welinder clearly is describing the same kind of timing issue, 
+: except the failure is in human ethical subroutines.  I didn't see
+: it until I'd read it three times.  <sigh> Such is the life of an 
+: optimist. <grin>
+: 
+: I'm off to carefully read (at least three times!) the proposed 
+: logging patch. 
+
+
+There is no safe way for a host to specify a file name that should
+be used for logging, or printing, or any other kind of output.  If
+host automated logging is the be provided it MUST be:
+
+ . authorized by the client
+
+ . to a file specified by the client
+
+This should not be done via a standard control sequence.  If it is 
+going to be done it should be performed via a private sequence (preferably
+not a '?' sequence) or via an APC.
+
+    Jeffrey Altman * Sr.Software Designer * Kermit-95 for Win32 and OS/2
+                 The Kermit Project * Columbia University
+              612 West 115th St #716 * New York, NY * 10025
+  http://www.kermit-project.org/k95.html * kermit-support@kermit-project.org
+
+ //////////////////////////////////////////////////////////////////////////////
+
+From: ocurtin@NOSPAM.usa.net (Curly++)
+Newsgroups: comp.terminals,comp.os.linux.admin
+Subject: Re: Escape sequences for xterm?
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <pe9w4.255$G15.5963@iad-read.news.verio.net>
+    <slrn8c5jik.4o6.ocurtin@jarod.oc> <slrn8c7r5p.7e7.ocurtin@jarod.oc>
+    <8a1bfi$sn5$1@newsmaster.cc.columbia.edu>
+Organization: The Minetown Digger
+Date: Mon, 6 Mar 2000 22:10:52 -0500
+
+
+In comp.os.linux.admin, Jeffrey Altman proclaimed:
+> In article <slrn8c7r5p.7e7.ocurtin@jarod.oc>,
+> Curly++ <ocurtin@NOSPAM.usa.net> wrote:
+> : In comp.terminals, Curly++ proclaimed:
+> :  
+> : > DISCLAIMER: I'm not a security expert and I don't play one on TV.
+> : 
+> : Geez, I'll never get that TV job.  <dramatic sigh>
+> : 
+> : I went back to look at Morten Welinder and Branden Robinson's 
+> : postings to bugtraq.  Ya now, I don't even have to think to see 
+> : how *machines* could get confused splitting the data stream 
+> : between the local screen-image and the remote host.  But Morten 
+> : Welinder clearly is describing the same kind of timing issue, 
+> : except the failure is in human ethical subroutines.  I didn't see
+> : it until I'd read it three times.  <sigh> Such is the life of an 
+> : optimist. <grin>
+> : 
+> : I'm off to carefully read (at least three times!) the proposed 
+> : logging patch. 
+> 
+> There is no safe way for a host to specify a file name that should
+> be used for logging, or printing, or any other kind of output.  If
+
+
+It's a connundrum, all right.  I started this thinking it would be a 
+breeze.  Making the part I needed was simple and straightforward. 
+Fitting it into the configurator was a bit more work.  But making it 
+secure enough to distribute... this is tough!
+
+> host automated logging is the be provided it MUST be:
+> 
+>  . authorized by the client
+
+Yes.  Authorization may be implicit, just as you "authorize" someone 
+to modify your log files by connectiong to your anonymous FTP server, 
+so too you might provide a very limited authorization to write to a 
+file within a carefully proscribed namespace. 
+
+>  . to a file specified by the client
+
+I've only really considered *nix for building a name.  But I 
+suspect this can be easily addapted to other OSs.
+
+I had hoped I could use the code that opens the log in the patch 
+posted to bugtraq, but the method seems broken to me.  Also, I 
+can't see how it deals with the symlink problem, but I haven't 
+had time to play with it yet.  It is broken in terms of the 
+forced naming.  First, it allows the file to be anywhere because 
+it opens it in the current directory.  I think it should be 
+restricted to a selection between the user's home directory and 
+the system-wide tmp directory.  Second, using the time to create 
+a "unique" name is just wrong.  A user starting two sessions from
+the same shell script will have a problem, but can deal with it 
+by adding "sleep" to slow down that expensive, fast computer.  
+However, if it's two different users clicking at the same time, 
+the user cannot predict or prevent the collision.  It would have 
+been less work and more reliable to use UID and PID instead of 
+time.  Still not perfect, but at least the user can clean out old
+files to prevent collisions. 
+
+I'm planning to put two restrictions.  First, a screen dump must 
+go to a new file.  This is harsh, but I think I need it to deal 
+with the symlink race problem.  Second, the pathname of the file 
+is severely restricted.  As long as the script/host has just a 
+little control, it can do nice things for the user.  It doesn't 
+need full control of the pathname. 
+
+The pathname will be [dir]/screen[.UID.PID].txt where [dir] is 
+required and must be either "/tmp" or "/home/me".  Home would be 
+determined from /etc/passwd, not from $HOME.  I'd like to make 
+".UID.PID" replaceable within a narrow range.  With these 
+restrictions, an external script which started the xterm (see 
+/bin/expect) can have just enough control to detect some trigger 
+and grab a screen image.  A script should not be forced to do 
+extra work between keystrokes to clear the file if a name change 
+will be sufficient.
+ 
+Requiring that a new file be created for each screen dump partly 
+protects existing files from modification, but doesn't fully deal
+with the symlink race condition.  I expect that can be solved 
+using the low-level I/O library, (i.e. open instead of fopen) but 
+I haven't set up the experiment yet. 
+
+
+Now, I *don't* think like a cracker, so if I've missed anything, 
+please point it out to me!
+
+
+> This should not be done via a standard control sequence.  If it is 
+> going to be done it should be performed via a private sequence (preferably
+> not a '?' sequence) or via an APC.
+
+Hmm.  I was thinking...
+
+OSC Ps ; P1 ; P2 ; Pt ST 
+where Ps is the unique value to select this service, 
+p1 is 0 for "use home", 1 for "use /tmp"
+p2 is 0 for mode 0666, 1 for mode 0600
+Pt is: empty to use UID.PID
+       " " (blank) to eliminate UID.PID
+       or 1-8 digits, letters and period.
+
+A malicious host or a broken program could fill a partition with 
+files named screen.1.txt, screen.2.txt and so on.  But I think 
+that's all it can do.  Is filling the disk a serious enough 
+threat to limit the Pt to one character?  That wouldn't be harsh, 
+but I think it's unnecessary. 
+
+Why is this a bad idea?
+
+
+-- 
+Oisin  "Curly++"  Curtin                     ocurtin@SPAM.usa.net
+Surface Liaison, Minetown Digger                    Send no SPAM.
+                                http://pages.infinit.net/curlypp/
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <pe9w4.255$G15.5963@iad-read.news.verio.net>
+    <slrn8c5jik.4o6.ocurtin@jarod.oc> <slrn8c7r5p.7e7.ocurtin@jarod.oc>
+    <8a1bfi$sn5$1@newsmaster.cc.columbia.edu> <slrn8c8spq.8st.ocurtin@jarod.oc>
+Organization: Clark Internet Services, Inc., Ellicott City, MD USA
+User-Agent: tin/1.5.2-20000119 ("Sumerland") (UNIX) (SunOS/5.6 (sun4u))
+Lines: 15
+Message-ID: <ZIdx4.1093$G15.28286@iad-read.news.verio.net>
+Date: Tue, 07 Mar 2000 20:34:01 GMT
+From: "T.E.Dickey" <dickey@shell.clark.net>
+Subject: Re: Escape sequences for xterm?
+
+Curly++ <ocurtin@nospam.usa.net> wrote:
+
+> I had hoped I could use the code that opens the log in the patch 
+> posted to bugtraq, but the method seems broken to me.  Also, I 
+
+briefly, the point of the patch is to ensure that the effective user owns
+the file - and no one else.  if the file is in a directory that prevents
+non-owners from deleting the file, then that covers most of the remaining
+issues.  (I added a bit to that though - it's in the most recent patch
+I made for xterm).
+
+-- 
+Thomas E. Dickey
+dickey@clark.net
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Organization: It's in one of the piles
+Message-ID: <38C4C0D0.D5AD4FF@rdel.co.uk>
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <pe9w4.255$G15.5963@iad-read.news.verio.net>
+    <slrn8c5jik.4o6.ocurtin@jarod.oc> <slrn8c7r5p.7e7.ocurtin@jarod.oc>
+    <8a1bfi$sn5$1@newsmaster.cc.columbia.edu> <slrn8c8spq.8st.ocurtin@jarod.oc>
+Date: Tue, 07 Mar 2000 08:41:52 +0000
+From: Paul Williams <flo@rdel.co.uk>
+Subject: Re: Escape sequences for xterm?
+
+Curly++ wrote:
+> 
+> In comp.os.linux.admin, Jeffrey Altman proclaimed:
+> >
+> > This should not be done via a standard control sequence.  If it is
+> > going to be done it should be performed via a private sequence
+> > (preferably not a '?' sequence) or via an APC.
+> 
+> Hmm.  I was thinking...
+> 
+> OSC Ps ; P1 ; P2 ; Pt ST
+> where Ps is the unique value to select this service,
+> p1 is 0 for "use home", 1 for "use /tmp"
+> p2 is 0 for mode 0666, 1 for mode 0600
+> Pt is: empty to use UID.PID
+>        " " (blank) to eliminate UID.PID
+>        or 1-8 digits, letters and period.
+
+It's a shame that the writers of xterm didn't structure the code space
+for OSC in the same way that DEC did with DCS, ie. use the same
+
+  Param ;...; Param Intermediate Final
+
+structure as for CSI, with extra, textual parameters appearing after
+Final and before ST. It would've made the parser a lot simpler, because
+you'd know unambiguously where the text starts, even with a variable
+number of parameters. At the moment, it seems that the existing codes
+are of the form
+
+  OSC Ps ; Pt ST
+
+which is OK until you add more Ps (or Pn) parameters before Pt. Then you
+have to start doing something special in the parser based on the value
+of the first Ps.
+
+(Of course, this decision is historical -- no reflection on the current
+maintainers. Never let history get in the way of a good whinge, I say!)
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Organization: Columbia University
+Lines: 41
+Message-ID: <8a33dh$bko$1@newsmaster.cc.columbia.edu>
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <8a1bfi$sn5$1@newsmaster.cc.columbia.edu> <slrn8c8spq.8st.ocurtin@jarod.oc>
+    <38C4C0D0.D5AD4FF@rdel.co.uk>
+Date: 7 Mar 2000 14:23:45 GMT
+From: jaltman@watsun.cc.columbia.edu (Jeffrey Altman)
+Subject: Re: Escape sequences for xterm?
+
+In article <38C4C0D0.D5AD4FF@rdel.co.uk>,
+Paul Williams  <flo@rdel.co.uk> wrote:
+: > OSC Ps ; P1 ; P2 ; Pt ST
+: > where Ps is the unique value to select this service,
+: > p1 is 0 for "use home", 1 for "use /tmp"
+: > p2 is 0 for mode 0666, 1 for mode 0600
+: > Pt is: empty to use UID.PID
+: >        " " (blank) to eliminate UID.PID
+: >        or 1-8 digits, letters and period.
+: 
+: It's a shame that the writers of xterm didn't structure the code space
+: for OSC in the same way that DEC did with DCS, ie. use the same
+: 
+:   Param ;...; Param Intermediate Final
+: 
+: structure as for CSI, with extra, textual parameters appearing after
+: Final and before ST. It would've made the parser a lot simpler, because
+: you'd know unambiguously where the text starts, even with a variable
+: number of parameters. At the moment, it seems that the existing codes
+: are of the form
+: 
+:   OSC Ps ; Pt ST
+: 
+: which is OK until you add more Ps (or Pn) parameters before Pt. Then you
+: have to start doing something special in the parser based on the value
+: of the first Ps.
+
+The whole purpose of the control sequences OSC, APC, DCS, PM, PU1, PU2
+are so that something special will be done with the contents.  If you
+can represent the command using X3.64 notation then you should not be
+using an OSC but should instead be using a private CSI sequence.
+
+Just to set the record straight, the OSC sequences for Set Window Title
+and Set Icon Name were developed by DEC for the DECterm and were later 
+supported on windowing versions of the VT terminals.
+
+
+    Jeffrey Altman * Sr.Software Designer * Kermit-95 for Win32 and OS/2
+                 The Kermit Project * Columbia University
+              612 West 115th St #716 * New York, NY * 10025
+  http://www.kermit-project.org/k95.html * kermit-support@kermit-project.org
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Organization: It's in one of the piles
+Lines: 57
+Message-ID: <38C51FE0.11DD3325@rdel.co.uk>
+References: <slrn8c06up.tai.ocurtin@jarod.oc>
+    <8a1bfi$sn5$1@newsmaster.cc.columbia.edu> <slrn8c8spq.8st.ocurtin@jarod.oc>
+    <38C4C0D0.D5AD4FF@rdel.co.uk> <8a33dh$bko$1@newsmaster.cc.columbia.edu>
+Date: Tue, 07 Mar 2000 15:27:28 +0000
+From: Paul Williams <flo@rdel.co.uk>
+Subject: Re: Escape sequences for xterm?
+
+Jeffrey Altman wrote:
+> 
+> In article <38C4C0D0.D5AD4FF@rdel.co.uk>,
+> Paul Williams  <flo@rdel.co.uk> wrote:
+> : > OSC Ps ; P1 ; P2 ; Pt ST
+> : > where Ps is the unique value to select this service,
+> : > p1 is 0 for "use home", 1 for "use /tmp"
+> : > p2 is 0 for mode 0666, 1 for mode 0600
+> : > Pt is: empty to use UID.PID
+> : >        " " (blank) to eliminate UID.PID
+> : >        or 1-8 digits, letters and period.
+> :
+> : It's a shame that the writers of xterm didn't structure the code space
+> : for OSC in the same way that DEC did with DCS, ie. use the same
+> :
+> :   Param ;...; Param Intermediate Final
+> :
+> : structure as for CSI, with extra, textual parameters appearing after
+> : Final and before ST. It would've made the parser a lot simpler, because
+> : you'd know unambiguously where the text starts, even with a variable
+> : number of parameters. At the moment, it seems that the existing codes
+> : are of the form
+> :
+> :   OSC Ps ; Pt ST
+> :
+> : which is OK until you add more Ps (or Pn) parameters before Pt. Then you
+> : have to start doing something special in the parser based on the value
+> : of the first Ps.
+> 
+> The whole purpose of the control sequences OSC, APC, DCS, PM, PU1, PU2
+> are so that something special will be done with the contents.  If you
+> can represent the command using X3.64 notation then you should not be
+> using an OSC but should instead be using a private CSI sequence.
+
+
+You can't represent a command containing a sixel string or filename as a
+CSI sequence, so yes, you must use one of the extension mechanisms you
+listed above. However, that doesn't stop you structuring these in the
+same way as CSI _up to a point_. It makes sense to use as much of the
+existing parser for your new sequences, and then just differ at the
+point where you need parameters that don't fit the CSI structure. Take a
+look at all the DCS sequences defined by DEC, and you'll see that that's
+exactly what they did.
+
+> Just to set the record straight, the OSC sequences for Set Window Title
+> and Set Icon Name were developed by DEC for the DECterm and were later
+> supported on windowing versions of the VT terminals.
+
+Then I'd say that DEC only ever intended their OSCs to have one
+selective parameter. Any more than that, and your sequence starts
+getting ambiguous, because ';' doesn't have any standard meaning in OSC.
+
+Hmm...are you saying that DEC defined the sequence "OSC Ps ; title BEL"?
+Because that's the only version of Set Window Title and Set Icon Name
+that xterm used to accept. Or was that miscopied across from the DECterm
+implementation?
+
+Which "windowing versions of VT terminals" supported these sequences?
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Message-ID: <8a39tn$et8$1@pegasus.csx.cam.ac.uk>
+References: <slrn8c06up.tai.ocurtin@jarod.oc> <38C4C0D0.D5AD4FF@rdel.co.uk>
+    <8a33dh$bko$1@newsmaster.cc.columbia.edu> <38C51FE0.11DD3325@rdel.co.uk>
+NNTP-Posting-Host: ursa.cus.cam.ac.uk
+Organization: University of Cambridge, England
+Date: 7 Mar 2000 16:14:47 GMT
+From: bjh21@cus.cam.ac.uk (Ben Harris)
+Subject: Re: Escape sequences for xterm?
+
+In article <38C51FE0.11DD3325@rdel.co.uk>,
+Paul Williams  <flo@rdel.co.uk> wrote:
+>Hmm...are you saying that DEC defined the sequence "OSC Ps ; title BEL"?
+>Because that's the only version of Set Window Title and Set Icon Name
+>that xterm used to accept. Or was that miscopied across from the DECterm
+>implementation?
+
+My rather vague understanding, from reading the PuTTY sources (PuTTY 
+supports both DECterm and xterm title sequences) is that DECterm uses
+"OSC Ps L title ST" or somesuch.
+
+-- 
+Ben Harris
+Unix Support, University of Cambridge Computing Service.
+  If I wanted to speak for the University, I'd be in ucam.comp-serv.announce.
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Message-ID: <8a3am2$hs5$1@newsmaster.cc.columbia.edu>
+References: <slrn8c06up.tai.ocurtin@jarod.oc> <38C4C0D0.D5AD4FF@rdel.co.uk>
+    <8a33dh$bko$1@newsmaster.cc.columbia.edu> <38C51FE0.11DD3325@rdel.co.uk>
+Date: 7 Mar 2000 16:27:46 GMT
+Organization: Columbia University
+From: jaltman@watsun.cc.columbia.edu (Jeffrey Altman)
+Subject: Re: Escape sequences for xterm?
+
+In article <38C51FE0.11DD3325@rdel.co.uk>,
+Paul Williams  <flo@rdel.co.uk> wrote:
+: 
+: You can't represent a command containing a sixel string or filename as a
+: CSI sequence, so yes, you must use one of the extension mechanisms you
+: listed above. However, that doesn't stop you structuring these in the
+: same way as CSI _up to a point_. It makes sense to use as much of the
+: existing parser for your new sequences, and then just differ at the
+: point where you need parameters that don't fit the CSI structure. Take a
+: look at all the DCS sequences defined by DEC, and you'll see that that's
+: exactly what they did.
+
+And when you can do that you use a DCS instead of an OSC or APC.  
+DEC was very consistent about this.  All DCS sequences follow X3.64 and
+the others do not.
+
+: > Just to set the record straight, the OSC sequences for Set Window Title
+: > and Set Icon Name were developed by DEC for the DECterm and were later
+: > supported on windowing versions of the VT terminals.
+: 
+: Then I'd say that DEC only ever intended their OSCs to have one
+: selective parameter. Any more than that, and your sequence starts
+: getting ambiguous, because ';' doesn't have any standard meaning in OSC.
+: 
+: Hmm...are you saying that DEC defined the sequence "OSC Ps ; title BEL"?
+: Because that's the only version of Set Window Title and Set Icon Name
+: that xterm used to accept. Or was that miscopied across from the DECterm
+: implementation?
+
+DEC defined it.
+ 
+  DECSWT (Set Window Title)
+  DECSIN (Set Icon Name)
+
+: Which "windowing versions of VT terminals" supported these sequences?
+
+VT5xx has it.  And I think the VT420 had it but I don't have a manual to 
+check against at the moment.
+
+
+
+
+    Jeffrey Altman * Sr.Software Designer * Kermit-95 for Win32 and OS/2
+                 The Kermit Project * Columbia University
+              612 West 115th St #716 * New York, NY * 10025
+  http://www.kermit-project.org/k95.html * kermit-support@kermit-project.org
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+Organization: It's in one of the piles
+Lines: 20
+Message-ID: <38C52F31.57255BB4@rdel.co.uk>
+References: <slrn8c06up.tai.ocurtin@jarod.oc> <38C4C0D0.D5AD4FF@rdel.co.uk>
+    <8a33dh$bko$1@newsmaster.cc.columbia.edu> <38C51FE0.11DD3325@rdel.co.uk>
+    <8a3am2$hs5$1@newsmaster.cc.columbia.edu>
+Date: Tue, 07 Mar 2000 16:32:49 +0000
+From: Paul Williams <flo@rdel.co.uk>
+Subject: Re: Escape sequences for xterm?
+
+Jeffrey Altman wrote:
+> 
+> In article <38C51FE0.11DD3325@rdel.co.uk>,
+> Paul Williams  <flo@rdel.co.uk> wrote:
+> :
+> : You can't represent a command containing a sixel string or filename as a
+> : CSI sequence, so yes, you must use one of the extension mechanisms you
+> : listed above. However, that doesn't stop you structuring these in the
+> : same way as CSI _up to a point_. It makes sense to use as much of the
+> : existing parser for your new sequences, and then just differ at the
+> : point where you need parameters that don't fit the CSI structure. Take a
+> : look at all the DCS sequences defined by DEC, and you'll see that that's
+> : exactly what they did.
+> 
+> And when you can do that you use a DCS instead of an OSC or APC.
+> DEC was very consistent about this.  All DCS sequences follow X3.64 and
+> the others do not.
+
+But this was _only_ a DEC decision. IIRC, DCS is not defined by X3.64 to
+have any more structure than OSC or APC.
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals,comp.os.linux.admin
+From: "T.E.Dickey" <dickey@shell.clark.net>
+Subject: Re: Escape sequences for xterm?
+References: <slrn8c06up.tai.ocurtin@jarod.oc> <38C4C0D0.D5AD4FF@rdel.co.uk>
+    <8a33dh$bko$1@newsmaster.cc.columbia.edu> <38C51FE0.11DD3325@rdel.co.uk>
+    <8a39tn$et8$1@pegasus.csx.cam.ac.uk>
+Message-ID: <4Rdx4.1096$G15.28286@iad-read.news.verio.net>
+Date: Tue, 07 Mar 2000 20:42:40 GMT
+
+Ben Harris <bjh21@cus.cam.ac.uk> wrote:
+> In article <38C51FE0.11DD3325@rdel.co.uk>,
+> Paul Williams  <flo@rdel.co.uk> wrote:
+>>Hmm...are you saying that DEC defined the sequence "OSC Ps ; title BEL"?
+>>Because that's the only version of Set Window Title and Set Icon Name
+>>that xterm used to accept. Or was that miscopied across from the DECterm
+>>implementation?
+
+> My rather vague understanding, from reading the PuTTY sources (PuTTY 
+> supports both DECterm and xterm title sequences) is that DECterm uses
+> "OSC Ps L title ST" or somesuch.
+
+
+yes (OSC is supposed to end with ST, DECterm does the Right Thing).  
+I had the impression that Sun's use of this sort of escape sequence
+preceded DEC's - but since both were implemented ~12 years ago, I'm
+not sure (I was using Apollo's at the time, and didn't much like X or
+xterm ;-).
+
+-- XFree86 xterm recognizes both...
+
+-- 
+Thomas E. Dickey
+dickey(at)clark.net
+http://www.clark.net/pub/dickey
+
+ //////////////////////////////////////////////////////////////////////////////
+
+
+Newsgroups: comp.unix.solaris,comp.terminals,comp.windows.x.apps,
+    comp.unix.questions
+References: <3B4225C4.FB86F2EC@to.gd-es.com> <3b425acd@news.uni-ulm.de>
+    <q8t07.50$iL4.120016@news.pacbell.net> <20010704190000_rshu@stratagy.com> 
+User-Agent: tin/1.4.5-20010409 ("One More Nightmare") (UNIX) (SunOS/5.8 (sun4u))
+Organization: united xpiloteers
+Message-ID: <3b437542@news.uni-ulm.de>
+Supersedes: <3b437389@news.uni-ulm.de>
+Date: 4 Jul 2001 21:57:54 +0200
+From: Sven Mascheck <sven.mascheck(at)student.uni-ulm.de>
+Subject: Re: resetting xterm under Solaris 8
+
+[sorry, supersede: named original group, 2 typos]
+
+In comp.unix.solaris, Richard S. Shuford wrote:
+>
+> Allen M. Cohen wrote:
+
+>> Sometimes an xterm session gets stuck in either reverse video state
+>> and/or underline state.
+
+> However, I think Allen is *not* reporting a line-drawing character problem.
+
+Yup, thanks for pointing out, i confused underline with linedrawing!
+
+My reference [1]tried to cover this and all related stuff (xterm reset,
+using an alias to reset a VT like terminal, reason for linedrawing problems,
+as text really becomes unreadable, then) in detail with explanations.
+
+
+> I devised a C-shell hack that sends some appropriate control sequences to 
+> an DEC-VT100/VT220-compatible terminal or emulator that should bring it to
+> a known good state.  A uuencoded self-explanatory file "cls.uue" appears
+> below.
+
+Nice idea to use uuencoding to transfer the control sequences via Usenet.
+
+An alternative i had found in an old Usenet posting ('95) is something
+like the follwing (here bourne shell):
+
+    alias vtn='echo "X[mX(BX)0OX[?5lX7X[rX8" | tr "XO" "\033\017"'
+
+This is even editable on the run when experimenting.
+
+
+BTW, about your control sequences:  In XFree86/X11 xterm with
+TERM=xterm-xfree86/vt100, the last few characters are "left over"
+("8J i<esc>").   Perhaps as there is a "nobreakspace" contained.
+
+When skipping this last control sequence for now, your version would read
+
+    alias vtn='echo "X[4iX[?4iX[?38lX\X(BX)0OX[?5lX[0mX[rX[HX[JY[4iX[?4iX[?38lX\X(BX)0OX[?5lX[0mX[rX[H" | tr "XOY" "\033\017\203"'
+
+(line broken at end)
+
+
+[I am not sure about the FUP2, comp.terminals?]
+Sven
+-- 
+[1] <http://www.uni-ulm.de/~s_smasch/alternate_charset/>, tuned for critics
+
+    2003 updated URL:
+
+     http://www.in-ulm.de/~mascheck/various/alternate_charset/
+
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.unix.solaris,comp.terminals,comp.windows.x.apps,
+    comp.unix.questions
+Message-ID: <20010705163030_rshu@stratagy.com>
+References: <3B4225C4.FB86F2EC@to.gd-es.com> <3b425acd@news.uni-ulm.de>
+	<q8t07.50$iL4.120016@news.pacbell.net>
+        <20010704190000_rshu@stratagy.com>
+	<3b437542@news.uni-ulm.de>
+Organization: Stratagy Users Group
+Expires: Wed, 15 Aug 2001 23:59:59 GMT
+Date: Thu, 5 Jul 2001 16:30:30 GMT
+From: "Richard S. Shuford" <shuford@list.stratagy.REMOVE-THIS-PART.com>
+Subject: Re: resetting xterm under Solaris 8
+
+Sven Mascheck <sven.mascheck(at)student.uni-ulm.de> wrote:
+> 
+> BTW, about your control sequences:  In XFree86/X11 xterm with
+> TERM=xterm-xfree86/vt100, the last few characters are "left over"
+> ("8J i<esc>").    Perhaps as there is a "nobreakspace" contained.
+   
+
+This is puzzling.  The sequence "8J i" does not appear in my file.
+
+Here again is the uuencoded form:
+
+-----------------------------------------------------------
+begin 444 .cls
+J&ULT:1M;/S1I&UL_,SAL&UP;*$(;*3 /&UL_-6P;6S!M&UMR&UM(&UM*
+   
+end
+-----------------------------------------------------------
+
+When decoded and after the unprintables are rendered into printable
+tokens, it looks like this:
+
+    ^[[4i^[[?4i^[[?38l^[\^[(B^[)0^O^[[?5l^[[0m^[[r^[[H^[[J
+
+There is nothing in there that should be interpreted as a "nobreakspace",
+if the ANSI X3.64 parsing rules are being properly followed.
+Is it possible that your "uudecode" program is decoding improperly?
+
+The XFree86/X11 distribution contains the "xterm" variant maintained
+by Thomas Dickey, and I certainly have tested my little hack with an
+earlier version of that package.
+
+I note that several people have contributed suggestions on how to
+reset xterm visual attributes using the "tput" command to extract
+codes from the "terminfo" database.  This is arguably the "proper"
+way to do the job, but my cat-the-file hack does work even if the
+terminal type is set wrong, and it also resets some obscure modes 
+of DEC-style terminals that may not be represented by codes in the
+terminfo database.  (There are yet some people in the world who are
+using real VT420 character-cell terminals to connect to Solaris!) 
+
+Other video-terminal information is archived at
+
+    http://www.cs.utk.edu/~shuford/terminal_index.html  (contains file you are now viewing)
+
+ ...Richard S. Shuford
+
+ //////////////////////////////////////////////////////////////////////////////
+
+In most Solaris releases, the following trivial shell script is equivalent.
+
+#!/bin/sh
+printf \
+"\033[4i\033[?4i\033[?38l\033\\033(B\033)0\017\033[?5l\033[0m\033[r\033[H\033[J"
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.unix.solaris
+Organization: http://groups.google.com/
+Message-ID: <860c5108.0107021102.531938f1@posting.google.com>
+References: <4f8fe677.0106282305.58233eb5@posting.google.com>
+    <9hllcp$sdh$1@news.okay.net>
+NNTP-Posting-Date: 2 Jul 2001 19:02:57 GMT
+Date: 2 Jul 2001 12:02:56 -0700
+From: cvernon(at)enron.com (Clayton Vernon)
+Subject: Re: xterm session crashes very often
+
+"Thomas Dehn" <thomas-usenet(at)myokay.net> wrote in message news:<9hllcp$sdh$1@news.okay.net>...
+> "Radhakrishnan" <radhakrishnanv(at)yahoo.com> wrote:
+> > We are using Hummingbird Excedd
+> > as Xserver on NT4.0 to connect to
+> > boxes across WAN. Very often, the Xserver crashes. Have anyone faced
+> > this kind of problem?
+> 
+> Use the current version of eXceed on the PC side.
+> Make sure that fonts you are using are available
+> to your Xserver.
+> 
+> 
+> 
+> Thomas
+
+i use the hell out of exceed and i've never seen it "crash" per se.
+
+what i have seen are certain java applications map to the pc display
+in a way appearing to "crash" the task bar (they co-opt the entire
+display). and, i have seen in these java apps that they have
+difficulty permitting keystrokes in the java-based x-window- on one of
+my apps i run the java app 'nohup' in the background and completely
+kill off the invoking cmdtool/xterm. but, if you kill off the java app
+windows returns as normal.
+
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.unix.admin,comp.unix.cde,comp.unix.solaris
+Path: !uunet!dca.uu.net!newsfeed.fast.net!howland.erols.net
+      !news.maxwell.syr.edu!news.alt.net!usenet
+Organization: NYPD: We don't need no stinkin' license plates!
+Message-ID: <9i7aje$lgd$5@pita.alt.net>
+References: <a7b61a8c.0107052049.7dcb8351@posting.google.com>
+    <9i43cl$ac6$1@news1.Radix.Net>
+Fromage: cypher-@-punk.net goes to /dev/null
+Date: 7 Jul 2001 15:41:34 GMT
+From: cypher-@-punk.net
+Subject: Re: Escape sequence for "clear" command
+
+In comp.unix.solaris Thomas Dickey <dickey(at)saltmine.radix.net> wrote:
+#   In comp.unix.admin guess <guessfirst(at)yahoo.com> wrote:
+#  > Hello,
+#   
+#  > I'm using Solaris 8 (SPARC platform). Just started to use dtterm on
+#  > CDE(prevously was openwin). When I issue the "clear" command in front
+#  > of the Sun monitor (not using telnet), I want it to clear the
+#  > screen (cursor at the upper left hand corner, no problem with this).
+#  >
+#  > However I don't want it to clear the previous screen buffer, meaning
+#  > that I'm still able to scroll back to look at previous screen's data.
+#  > For those of u who have experience in openwin should know what I want
+#  > coz the "clear" command behaved this way under openwin. But it doesn't
+#  > work this way anymore under CDE (dtterm), it clears the previous screen
+#  > buffer as well. I can't scroll back to view the previous screen.
+#   
+#   I'd try the ANSI sequences for home, clear to end of display:
+#   
+#   	\E[H\E[0J
+#   
+#   The XFree86 xterm supports ANSI color and VT220 emulation
+#   There's an faq at
+#
+#   	http://dickey.his.com/xterm/xterm.faq.html
+#   	ftp://dickey.his.com/xterm
+
+And, not that anyone has asked...
+
+If you want an xterm to repaint the screen after using 'vi',
+add these to /usr/share/lib/terminfo/x/xterm:
+
+    tail -1 /usr/share/lib/terminfo/x/xterm.src
+        rmcup=\E[2J\E[?47l\E8, smcup=\E7\E[?47h,
+
+Use 'infocmp' to get source from the compiled 'xterm' entry,
+use 'tic' to compile it again.
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Date: 15 Jul 2001 11:18:48 +0200
+Organization: united xpiloteers
+Newsgroups: comp.unix.solaris
+Message-ID: <3b515ff8@news.uni-ulm.de>
+References: <m1ae2929n9.fsf@reader.newsguy.com>
+    <3B4F2D40.203CBDFA@kodak.com>
+From: Sven Mascheck <sven.mascheck@student.uni-ulm.de>
+Subject: Re: console login terminal color
+
+Mathew Kirsch <kirsch@kodak.com> wrote:
+> Harry Putnam wrote:
+
+>> If I choose terminal login from the selector thing.  I get a white
+>> terminal with black foreground.
+
+> [...] Besides, a graphical console should be used for a GUI.
+
+$ xterm -xrm 'XTerm*font: gallant' \
+ -xrm 'XTerm*background:  white' \
+ -xrm 'XTerm*foreground:  black' \
+ -xrm 'XTerm*cursorColor: black' \
+ -xrm 'XTerm*scrollBar:   False' \
+ -xrm 'XTerm.VT100.geometry: 80x34+80+100' \
+ -name long_live_the_console
+
+SvenCNR
+
+ ..............................................................................
+
+2003 update:
+
+Subsequently, Sven found that the font alias "gallant" works only 
+on SunOS 5.5 (Solaris 2.5).  Instead, the font name "Gallant19" is
+the right choice for the later releases.  (And in fact it's
+"-sun-gallant-demi-r-normal--19-190-72-72-m-120-iso8859-1").
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals
+References: <vtLKd.496$AY3.116@trndny05>
+Message-ID: <10vn3cvh4mio89b@corp.supernews.com>
+Date: Sat, 29 Jan 2005 13:20:31 -0000
+From: Thomas Dickey <dickey@saltmine.radix.net>
+Subject: Re: Hot-key to minimize Putty
+
+Barry <mail%polisource.com> wrote:
+>
+> Any tips for minimizing the current Putty window?
+
+It might respond to the window-modification escape sequences that xterm
+implements.  These are demonstrated by vttest...
+
+    http://invisible-island.net/vttest/
+
+under menu 11.
+
+(A quick read of the source code doesn't tell me yes/no to this question;
+it does honor the title change).
+
+-- 
+Thomas E. Dickey
+http://invisible-island.net/
+ ftp://invisible-island.net/
+
+ //////////////////////////////////////////////////////////////////////////////
+
+Newsgroups: comp.terminals
+References: <20070507215136.GG3593@interface.famille.thibault.fr>
+Message-ID: <1340luvjj2uf49d@corp.supernews.com>
+Date: Tue, 08 May 2007 10:58:39 -0000
+From: Thomas Dickey <dickey@saltmine.radix.net>
+Subject: Re: Getting the cursor coordinates?
+
+Samuel Thibault <samuel.thibault@ens-lyon.org> wrote:
+>
+> Hi,
+>
+> How standard is the CSI 6 n combination for getting the cursor position?
+> Can we reasonnably expect usual virtual terminals (unix virtual
+> consoles, xterms, ...) to always have it?
+
+
+It doesn't work with Sun's console emulator.  Can't test at the moment,
+but since I don't see the data for *BSD consoles, the same limitation
+may apply there as well.
+
+-- 
+Thomas E. Dickey
+http://invisible-island.net/
+ ftp://invisible-island.net/
+
+
+ //////////////////////////////////////////////////////////////////////////////
+
