@@ -85,7 +85,7 @@
        ["c" (S- 'right)]
        ["d" (S- 'left)]
        [_ (simple-key (unknown-escape-sequence lexeme))])]
-    [_ (error 'analyze-vt-bracket-key "Unexpected input sequence from lexer: ~v" lexeme)]))
+    [_ (simple-key (unknown-escape-sequence lexeme))]))
 
 (define (analyze-vt-O-mainchar lexeme mainchar)
   (match mainchar
