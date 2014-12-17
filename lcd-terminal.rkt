@@ -77,6 +77,7 @@
        ["D" (decode-shifting params 'left)]
        ["E" (decode-shifting params 'begin)]
        ["F" (decode-shifting params 'end)]
+       ["G" (decode-shifting params 'begin)] ;; linux console (!)
        ["H" (decode-shifting params 'home)]
        ["Z" (C-S- #\I)] ;; TODO: should this instead be a 'backtab key?
        ["a" (S- 'up)]
