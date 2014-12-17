@@ -87,43 +87,51 @@
        [_ (simple-key (unknown-escape-sequence lexeme))])]
     [_ (error 'analyze-vt-bracket-key "Unexpected input sequence from lexer: ~v" lexeme)]))
 
+(define (analyze-vt-O-mainchar lexeme mainchar)
+  (match mainchar
+    ["a" (C- 'up)]
+    ["b" (C- 'down)]
+    ["c" (C- 'right)]
+    ["d" (C- 'left)]
+
+    ;; rxvt keypad keys.
+    ;; Per http://www.vt100.net/docs/vt102-ug/appendixc.html, these
+    ;; are "ANSI Alternate Keypad Mode" sequences.
+    ["j" (simple-key #\*)]
+    ["k" (simple-key #\+)]
+    ["l" (simple-key #\,)] ;; my keypad doesn't have a comma
+    ["m" (simple-key #\-)]
+    ["n" (simple-key 'delete)] ;; #\.
+    ["o" (simple-key #\/)]
+    ["p" (simple-key 'insert)]       ;; #\0
+    ["q" (simple-key 'end)]          ;; #\1
+    ["r" (simple-key 'down)]         ;; #\2
+    ["s" (simple-key 'page-down)]    ;; #\3
+    ["t" (simple-key 'left)]         ;; #\4
+    ["u" (simple-key 'begin)]        ;; #\5
+    ["v" (simple-key 'right)]        ;; #\6
+    ["w" (simple-key 'home)]         ;; #\7
+    ["x" (simple-key 'up)]           ;; #\8
+    ["y" (simple-key 'page-up)]      ;; #\9
+
+    ["A" (simple-key 'up)]                            ;; kcuu1
+    ["B" (simple-key 'down)]                          ;; kcud1
+    ["C" (simple-key 'right)]                         ;; kcuf1
+    ["D" (simple-key 'left)]                          ;; kcub1
+    ["E" (simple-key 'begin)]                         ;; in screen
+    ["F" (simple-key 'end)]                           ;; kend
+    ["H" (simple-key 'home)]                          ;; khome
+    ["M" (add-modifier 'control (simple-key #\M))] ;; keypad enter (rxvt)
+    [_ (simple-key (unknown-escape-sequence lexeme))]))
+
 (define (analyze-vt-O-key lexeme)
   (match lexeme
+    [(pregexp "\eO(.)(.)" (list _ v-plus-one-str mainchar))
+     ;; screen generates shifting escapes for the keypad like this
+     (decode-shifting-number (string->number v-plus-one-str)
+                             (analyze-vt-O-mainchar lexeme mainchar))]
     [(pregexp "\eO(.)" (list _ mainchar))
-     (match mainchar
-       ["a" (C- 'up)]
-       ["b" (C- 'down)]
-       ["c" (C- 'right)]
-       ["d" (C- 'left)]
-
-       ;; rxvt keypad keys.
-       ;; Per http://www.vt100.net/docs/vt102-ug/appendixc.html, these
-       ;; are "ANSI Alternate Keypad Mode" sequences.
-       ["j" (simple-key #\*)]
-       ["k" (simple-key #\+)]
-       ["l" (simple-key #\,)] ;; my keypad doesn't have a comma
-       ["m" (simple-key #\-)]
-       ["n" (simple-key 'delete)] ;; #\.
-       ["o" (simple-key #\/)]
-       ["p" (simple-key 'insert)] ;; #\0
-       ["q" (simple-key 'end)] ;; #\1
-       ["r" (simple-key 'down)] ;; #\2
-       ["s" (simple-key 'page-down)] ;; #\3
-       ["t" (simple-key 'left)] ;; #\4
-       ["u" (simple-key 'begin)] ;; #\5
-       ["v" (simple-key 'right)] ;; #\6
-       ["w" (simple-key 'home)] ;; #\7
-       ["x" (simple-key 'up)] ;; #\8
-       ["y" (simple-key 'page-up)] ;; #\9
-
-       ["A" (simple-key 'up)] ;; kcuu1
-       ["B" (simple-key 'down)] ;; kcud1
-       ["C" (simple-key 'right)] ;; kcuf1
-       ["D" (simple-key 'left)] ;; kcub1
-       ["F" (simple-key 'end)] ;; kend
-       ["H" (simple-key 'home)] ;; khome
-       ["M" (C- #\M)] ;; keypad enter (rxvt)
-       [_ (simple-key (unknown-escape-sequence lexeme))])]
+     (analyze-vt-O-mainchar lexeme mainchar)]
     [other (simple-key (unknown-escape-sequence lexeme))]))
 
 (define lex-lcd-input
@@ -136,8 +144,8 @@
          [#\uff (M- 'backspace)]
          [(:: "\e[" (:? (:+ numeric) (:* #\; (:+ numeric))) any-char)
           (analyze-vt-bracket-key lexeme)]
-         [(:: "\eO" any-char)
-          (analyze-vt-O-key lexeme)]
+         [(:: "\eO" any-char) (analyze-vt-O-key lexeme)]
+         [(:: "\eO" numeric any-char) (analyze-vt-O-key lexeme)]
          ))
 
 (module+ main
