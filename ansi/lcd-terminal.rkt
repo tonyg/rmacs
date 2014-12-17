@@ -79,11 +79,19 @@
        ["F" (decode-shifting params 'end)]
        ["G" (decode-shifting params 'begin)] ;; linux console (!)
        ["H" (decode-shifting params 'home)]
+       ["J" #:when (equal? params '(2)) (S- 'home)] ;; st, http://st.suckless.org/
+       ["J" #:when (not params) (C- 'end)] ;; st, http://st.suckless.org/
+       ["K" #:when (equal? params '(2)) (S- 'delete)] ;; st, http://st.suckless.org/
+       ["K" #:when (not params) (S- 'end)] ;; st, http://st.suckless.org/
+       ["L" (C- 'insert)] ;; st, http://st.suckless.org/
+       ["M" (C- 'delete)] ;; st, http://st.suckless.org/
+       ["P" (simple-key 'delete)] ;; st, http://st.suckless.org/
        ["Z" (C-S- #\I)] ;; TODO: should this instead be a 'backtab key?
        ["a" (S- 'up)]
        ["b" (S- 'down)]
        ["c" (S- 'right)]
        ["d" (S- 'left)]
+       ["h" #:when (equal? params '(4)) (simple-key 'insert)] ;; st, http://st.suckless.org/
        [_ (simple-key (unknown-escape-sequence lexeme))])]
     [_ (simple-key (unknown-escape-sequence lexeme))]))
 
