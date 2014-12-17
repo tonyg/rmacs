@@ -75,8 +75,9 @@
        ["B" (decode-shifting params 'down)]
        ["C" (decode-shifting params 'right)]
        ["D" (decode-shifting params 'left)]
-       ["H" (decode-shifting params 'home)]
+       ["E" (decode-shifting params 'begin)]
        ["F" (decode-shifting params 'end)]
+       ["H" (decode-shifting params 'home)]
        ["Z" (C-S- #\I)] ;; TODO: should this instead be a 'backtab key?
        ["a" (S- 'up)]
        ["b" (S- 'down)]
@@ -93,12 +94,34 @@
        ["b" (C- 'down)]
        ["c" (C- 'right)]
        ["d" (C- 'left)]
+
+       ;; rxvt keypad keys.
+       ;; Per http://www.vt100.net/docs/vt102-ug/appendixc.html, these
+       ;; are "ANSI Alternate Keypad Mode" sequences.
+       ["j" (simple-key #\*)]
+       ["k" (simple-key #\+)]
+       ["l" (simple-key #\,)] ;; my keypad doesn't have a comma
+       ["m" (simple-key #\-)]
+       ["n" (simple-key 'delete)] ;; #\.
+       ["o" (simple-key #\/)]
+       ["p" (simple-key 'insert)] ;; #\0
+       ["q" (simple-key 'end)] ;; #\1
+       ["r" (simple-key 'down)] ;; #\2
+       ["s" (simple-key 'page-down)] ;; #\3
+       ["t" (simple-key 'left)] ;; #\4
+       ["u" (simple-key 'begin)] ;; #\5
+       ["v" (simple-key 'right)] ;; #\6
+       ["w" (simple-key 'home)] ;; #\7
+       ["x" (simple-key 'up)] ;; #\8
+       ["y" (simple-key 'page-up)] ;; #\9
+
        ["A" (simple-key 'up)] ;; kcuu1
        ["B" (simple-key 'down)] ;; kcud1
        ["C" (simple-key 'right)] ;; kcuf1
        ["D" (simple-key 'left)] ;; kcub1
-       ["H" (simple-key 'home)] ;; khome
        ["F" (simple-key 'end)] ;; kend
+       ["H" (simple-key 'home)] ;; khome
+       ["M" (C- #\M)] ;; keypad enter (rxvt)
        [_ (simple-key (unknown-escape-sequence lexeme))])]
     [other (simple-key (unknown-escape-sequence lexeme))]))
 
