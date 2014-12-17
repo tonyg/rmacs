@@ -147,15 +147,3 @@
          [(:: "\eO" any-char) (analyze-vt-O-key lexeme)]
          [(:: "\eO" numeric any-char) (analyze-vt-O-key lexeme)]
          ))
-
-(module+ main
-  (require "private/tty-raw-extension")
-  (tty-raw!)
-  (let loop ()
-    (match (lex-lcd-input (current-input-port))
-      [(? eof-object?) (void)]
-      [(== (C- #\D)) (void)]
-      [key
-       (printf "Key: ~v\r\n" key)
-       (loop)]))
-  (tty-restore!))

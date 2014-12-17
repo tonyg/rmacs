@@ -1,7 +1,10 @@
 #lang racket/base
 
 (require "private/tty-raw-extension")
-(require "ansi.rkt")
+(require "main.rkt")
+
+(require racket/set)
+(require racket/match)
 
 (define (main)
   (tty-raw!)
@@ -12,17 +15,15 @@
 		  (old-exit-handler v)))
 
   (for-each display (list (set-mode x11-any-event-mouse-tracking-mode)))
-  (flush-output)
 
+  (display "Type keys. Press control-D to exit.\r\n")
   (let loop ()
-    (define ch (read-byte))
-    (display (select-graphic-rendition ch))
-    (display (clear-to-eol))
-    (printf "Byte: ~v ~s\015\012" ch (integer->char ch))
-    (display (select-graphic-rendition))
-    ;;(flush-output)
-    (if (member ch '(4 8 127)) ;; EOF, C-h, DEL
-	(exit)
-	(loop))))
+    (flush-output)
+    (match (lex-lcd-input (current-input-port))
+      [(? eof-object?) (void)]
+      [(== (key #\D (set 'control))) (void)]
+      [key
+       (printf "Key: ~v\r\n" key)
+       (loop)])))
 
 (main)
