@@ -67,7 +67,7 @@ Scheme_Object *scheme_reload(Scheme_Env *env) {
 }
 
 Scheme_Object *scheme_initialize(Scheme_Env *env) {
-  atexit(ttyrestore);
+  atexit((void (*)(void)) ttyrestore);
   return scheme_reload(env);
 }
 
