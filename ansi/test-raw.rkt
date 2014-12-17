@@ -13,7 +13,8 @@
                       (lambda (handle)
                         (display (reset-mode x11-any-event-mouse-tracking-mode))))
 
-  (for-each display (list (set-mode x11-any-event-mouse-tracking-mode)))
+  ;; lcd-terminal isn't bright enough to parse mouse events yet, so this is disabled for now
+  ;; (for-each display (list (set-mode x11-any-event-mouse-tracking-mode)))
 
   (display "Type keys. Press control-D to exit.\r\n")
   (let loop ()
