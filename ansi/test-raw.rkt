@@ -1,6 +1,6 @@
 #lang racket/base
 
-(require "tty-raw-extension")
+(require "private/tty-raw-extension")
 (require "ansi.rkt")
 
 (define (main)

@@ -1,17 +1,16 @@
-SYSTEM_LIBRARY_SUBPATH:=compiled/native/$(shell racket -e '(display (path->string (system-library-subpath)))')
-SYSTEM_LIBRARY_SUFFIX:=$(shell racket -e '(begin (require dynext/file) (display (path->string (append-extension-suffix "DUMMY"))))' | sed -e s:DUMMY::)
+PACKAGENAME=ansi
+COLLECTS=ansi
 
-all: $(SYSTEM_LIBRARY_SUBPATH)/tty-raw-extension$(SYSTEM_LIBRARY_SUFFIX)
+all: setup
 
 clean:
-	rm -rf compiled
+	find . -name compiled -type d | xargs rm -rf
 
-$(SYSTEM_LIBRARY_SUBPATH):
-	mkdir -p $@
+setup:
+	raco setup $(COLLECTS)
 
-$(SYSTEM_LIBRARY_SUBPATH)/%$(SYSTEM_LIBRARY_SUFFIX): %.c $(SYSTEM_LIBRARY_SUBPATH)
-	mzc --xform $*.c
-	mzc --3m --cc $*.3m.c
-	mzc --3m --ld $@ $*_3m.o
-	rm -f $*.3m.c
-	rm -f $*_3m.o
+link:
+	raco pkg install --link -n $(PACKAGENAME) $$(pwd)
+
+unlink:
+	raco pkg remove $(PACKAGENAME)

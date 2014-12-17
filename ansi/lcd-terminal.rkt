@@ -149,7 +149,7 @@
          ))
 
 (module+ main
-  (require "tty-raw-extension")
+  (require "private/tty-raw-extension")
   (tty-raw!)
   (let loop ()
     (match (lex-lcd-input (current-input-port))
