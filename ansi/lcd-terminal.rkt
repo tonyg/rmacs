@@ -54,6 +54,11 @@
                             [6 (ctor 'page-down)]
                             [7 (ctor 'home)]
                             [8 (ctor 'end)]
+                            [11 (ctor 'f1)] [12 (ctor 'f2)] [13 (ctor 'f3)] [14 (ctor 'f4)]
+                            [15 (ctor 'f5)] [17 (ctor 'f6)] [18 (ctor 'f7)] [19 (ctor 'f8)]
+                            [20 (ctor 'f9)] [21 (ctor 'f10)] [23 (ctor 'f11)] [24 (ctor 'f12)]
+                            [25 (ctor 'f13)] [26 (ctor 'f14)] [28 (ctor 'f15)] [29 (ctor 'f16)]
+                            [31 (ctor 'f17)] [32 (ctor 'f18)] [33 (ctor 'f19)] [34 (ctor 'f20)]
                             [_ (simple-key (unknown-escape-sequence lexeme))])))
 
 (define (analyze-vt-bracket-key lexeme params mainchar)
@@ -76,7 +81,11 @@
     ["K" #:when (not params) (S- 'end)] ;; st, http://st.suckless.org/
     ["L" (C- 'insert)]                  ;; st, http://st.suckless.org/
     ["M" (C- 'delete)]                  ;; st, http://st.suckless.org/
-    ["P" (simple-key 'delete)]          ;; st, http://st.suckless.org/
+    ["P" #:when (not params) (simple-key 'delete)] ;; st, http://st.suckless.org/
+    ["P" (decode-shifting params 'f1)]
+    ["Q" (decode-shifting params 'f2)]
+    ["R" (decode-shifting params 'f3)]
+    ["S" (decode-shifting params 'f4)]
     ["Z" (C-S- #\I)] ;; TODO: should this instead be a 'backtab key?
     ["a" (S- 'up)]
     ["b" (S- 'down)]
@@ -120,6 +129,10 @@
     ["F" (simple-key 'end)]                           ;; kend
     ["H" (simple-key 'home)]                          ;; khome
     ["M" (add-modifier 'control (simple-key #\M))] ;; keypad enter (rxvt)
+    ["P" (simple-key 'f1)]
+    ["Q" (simple-key 'f2)]
+    ["R" (simple-key 'f3)]
+    ["S" (simple-key 'f4)]
     [_ (simple-key (unknown-escape-sequence lexeme))]))
 
 (define (interpret-ascii-code b)
