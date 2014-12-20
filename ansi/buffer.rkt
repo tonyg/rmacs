@@ -1,5 +1,21 @@
 #lang racket/base
 
+(provide main-mark-type
+         buffer?
+         make-buffer
+         buffer-size
+         buffer-move-to!
+         buffer-move-by!
+         buffer-mark!
+         buffer-clear-mark!
+         buffer-mark-pos
+         buffer-region-split
+         buffer-region
+         buffer-region-update!
+         call-with-excursion
+         buffer-search
+         buffer-find)
+
 (require "rope.rkt")
 (require "search.rkt")
 
@@ -20,13 +36,67 @@
   (buffer-seek! buf pos))
 
 (define (buffer-seek! buf pos)
-  (buffer-lift0 rope-seek buf pos))
+  (buffer-lift rope-seek buf pos))
 
 (define (buffer-move-by! buf delta)
   (buffer-move-to! buf (+ (buffer-pos buf) delta)))
 
 (define (buffer-mark! buf [mtype main-mark-type] #:position [pos (buffer-pos buf)] #:value [value #t])
-  (buffer-lift0 replace-mark buf mtype pos value))
+  (buffer-lift replace-mark buf mtype pos value))
+
+(define (buffer-clear-mark! buf [mtype main-mark-type])
+  (define pos (find-mark-pos (buffer-rope buf) mtype))
+  (if pos
+      (buffer-lift clear-mark buf mtype pos)
+      buf))
+
+(define (buffer-mark-pos buf [mtype main-mark-type])
+  (find-mark-pos (buffer-rope buf) mtype))
+
+(define (buffer-region-split* buf pos mark)
+  (define lo (min pos mark))
+  (define hi (max pos mark))
+  (define-values (l mr) (rope-split (buffer-rope buf) lo))
+  (define-values (m r) (rope-split mr (- hi lo)))
+  (values l m r))
+
+(define (buffer-region-split buf
+                             #:point [pos (buffer-pos buf)]
+                             #:mark [mark (buffer-mark-pos buf)])
+  (buffer-region-split* buf pos mark))
+
+(define (buffer-region buf
+                       #:point [pos (buffer-pos buf)]
+                       #:mark [mark (buffer-mark-pos buf)])
+  (define-values (_l m _r) (buffer-region-split* buf pos mark))
+  m)
+
+(define (buffer-region-update! buf updater
+                               #:point [pos (buffer-pos buf)]
+                               #:mark [mark (buffer-mark-pos buf)])
+  (define-values (l m r) (buffer-region-split* buf pos mark))
+  (set-buffer-rope! buf (rope-concat (list l (updater m) r)))
+  buf)
+
+(define (call-with-excursion buf f)
+  (define excursion (gensym 'excursion))
+  (define saved-mark-type (mark-type (format "Saved mark ~a" excursion) 'right))
+  (define saved-point-type (mark-type (format "Saved point ~a" excursion) 'right))
+  (buffer-mark! buf saved-mark-type #:position (buffer-mark-pos buf))
+  (buffer-mark! buf saved-point-type #:position (buffer-pos buf))
+  (define (restore!)
+    (define restore-mark-pos (buffer-mark-pos buf saved-mark-type))
+    (define restore-point-pos (buffer-mark-pos buf saved-point-type))
+    (when restore-mark-pos (buffer-mark! buf #:position restore-mark-pos))
+    (when restore-point-pos (buffer-move-to! buf restore-point-pos))
+    (buffer-clear-mark! buf saved-mark-type)
+    (buffer-clear-mark! buf saved-point-type))
+  (with-handlers [(exn? (lambda (e)
+                          (restore!)
+                          (raise e)))]
+    (define result (f))
+    (restore!)
+    result))
 
 (define (buffer-search* buf start-pos forward? move? find-delta)
   (define-values (l r) (rope-split (buffer-rope buf) start-pos))
@@ -52,43 +122,7 @@
   (buffer-search* buf start-pos forward? move?
                   (lambda (piece) (find-in-rope delims piece #:forward? forward?))))
 
-(define (buffer-lift0 f buf . args)
+(define (buffer-lift f buf . args)
   (define new-rope (apply f (buffer-rope buf) args))
   (set-buffer-rope! buf new-rope)
   buf)
-
-(define (buffer-lift1 f buf . args)
-  (define-values (result new-rope) (apply f (buffer-rope buf) args))
-  (set-buffer-rope! buf new-rope)
-  result)
-
-;; Finseth's book defines a C routine, Framer(), which is intended to
-;; ensure that the `top_of_window` mark, denoting the position where
-;; display should begin for the current window, is in a sane position.
-;; The mark is left alone unless the cursor is outside the currently
-;; displayed window, either above or below. If the mark needs to be
-;; moved, it is moved to a line such that the cursor, after redisplay,
-;; will end up at a configurable percentage of the way down the
-;; window.
-;;
-;; MarkType Location Buffer -> Buffer
-;; Ensures the given mark is sanely positioned as a top-of-window mark
-;; with respect to the given cursor position.
-(define (frame-buffer! top-of-window-mtype cursor-position window-height buf
-                       #:preferred-position-fraction [preferred-position-fraction 1/2])
-  (define old-top-of-window-pos (find-next-mark-pos (buffer-rope buf) top-of-window-mtype))
-  (define preferred-distance-from-bottom (ceiling (* window-height (- 1 preferred-position-fraction))))
-  (let loop ((pos (buffer-find buf "\n" #:forward? #f #:move? #f))
-             (line-count 0)
-             (top-of-window-pos old-top-of-window-pos))
-    (define new-top-of-window-pos
-      (if (= line-count preferred-distance-from-bottom) pos top-of-window-pos))
-    (cond
-     [(<= pos old-top-of-window-pos)
-      buf]
-     [(= line-count window-height)
-      (buffer-mark! buf top-of-window-mtype #:position new-top-of-window-pos)]
-     [else
-      (loop (buffer-find buf "\n" #:forward? #f #:move? #f #:position (- pos 1))
-            (+ line-count 1)
-            new-top-of-window-pos)])))
