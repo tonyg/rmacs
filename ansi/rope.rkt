@@ -62,8 +62,8 @@
               left ;; Rope or #f
               right ;; Rope or #f
               size* ;; Number, total length of this rope
-              marks* ;; Set of MarkType
-              mark-index ;; (Hash MarkType (Hash Number (Setof Any))), marks in this span
+              marks* ;; (Seteq MarkType)
+              mark-index ;; (Hasheq MarkType (Hash Number (Set Any))), marks in this span
               ) #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -124,7 +124,7 @@
 (define (empty-rope) #f)
 
 (define (strand->rope t)
-  (rope t #f #f (strand-count t) (set) (hash)))
+  (rope t #f #f (strand-count t) (seteq) (hasheq)))
 
 (define (string->rope s)
   (strand->rope (string->strand s)))
@@ -285,7 +285,7 @@
              #f
              'will-be-recomputed
              'will-be-recomputed
-             (hash mtype (hash position value)))
+             (hasheq mtype (hash position value)))
        (struct-copy rope r [mark-index (add-mark-to-table (rope-mark-index r)
                                                           mtype
                                                           (- position (rope-lo r))
@@ -312,8 +312,8 @@
 (define (clear-all-marks r)
   (and r
        (struct-copy rope r
-                    [marks* (set)]
-                    [mark-index (hash)]
+                    [marks* (seteq)]
+                    [mark-index (hasheq)]
                     [left (clear-all-marks (rope-left r))]
                     [right (clear-all-marks (rope-right r))])))
 
@@ -321,7 +321,7 @@
   (if r (rope-size* r) 0))
 
 (define (rope-marks r)
-  (if r (rope-marks* r) (set)))
+  (if r (rope-marks* r) (seteq)))
 
 (define (reindex r)
   (struct-copy rope r
@@ -330,7 +330,7 @@
                          (strand-count (rope-strand r)))]
                [marks* (set-union (rope-marks (rope-left r))
                                   (rope-marks (rope-right r))
-                                  (list->set (hash-keys (rope-mark-index r))))]))
+                                  (list->seteq (hash-keys (rope-mark-index r))))]))
 
 (define (rope-split r0 position)
   (define r (splay-to-pos 'rope-split r0 position))
@@ -343,13 +343,13 @@
   (define right-strand (substrand t offset))
   (values (if (strand-empty? left-strand)
               rl
-              (reindex (rope left-strand rl #f 'will-be-recomputed (set) left-index)))
+              (reindex (rope left-strand rl #f 'will-be-recomputed (seteq) left-index)))
           (if (strand-empty? right-strand)
               rr
-              (reindex (rope right-strand #f rr 'will-be-recomputed (set) right-index)))))
+              (reindex (rope right-strand #f rr 'will-be-recomputed (seteq) right-index)))))
 
 (define (partition-mark-index index offset)
-  (for*/fold [(l (hash)) (r (hash))]
+  (for*/fold [(l (hasheq)) (r (hasheq))]
              [((mtype posvals) (in-hash index))
               ((pos val) (in-hash posvals))]
     (values (if (or (< pos offset) (and (= pos offset) (eq? (mark-type-stickiness mtype) 'left)))
@@ -372,7 +372,7 @@
         (let ((merged-index (merge-mark-indexes (rope-mark-index rl)
                                                 (rope-mark-index rr)
                                                 (strand-count (rope-strand rl)))))
-          (reindex (rope t (rope-left rl) (rope-right rr) 'will-be-recomputed (set) merged-index)))
+          (reindex (rope t (rope-left rl) (rope-right rr) 'will-be-recomputed (seteq) merged-index)))
         (replace-right rl rr))]))
 
 (define (rope-concat rs)
@@ -484,8 +484,8 @@
                   ((_) (check-equal? (find-all-marks/type l mtype2) (hash)))
                   ((_) (check-equal? (rope->string l) (substring text 0 6)))
                   ((_) (check-equal? (rope->string r) (substring text 6 (string-length text))))
-                  ((_) (check-equal? (rope-marks l) (set mtype1)))
-                  ((_) (check-equal? (rope-marks r) (set mtype1 mtype2)))
+                  ((_) (check-equal? (rope-marks l) (seteq mtype1)))
+                  ((_) (check-equal? (rope-marks r) (seteq mtype1 mtype2)))
                   ((l r) (rope-split r 3))
                   ((_) (check-equal? (find-all-marks/type r mtype1) (hash)))
                   ((_) (check-equal? (find-all-marks/type l mtype1) (hash 3 "second")))
