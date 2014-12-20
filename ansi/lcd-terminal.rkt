@@ -3,6 +3,7 @@
 
 (provide (struct-out key)
          (struct-out unknown-escape-sequence)
+         (struct-out position-report)
          lex-lcd-input)
 
 (require racket/set)
@@ -13,6 +14,7 @@
 
 (struct unknown-escape-sequence (string) #:prefab)
 (struct key (value modifiers) #:prefab)
+(struct position-report (row column) #:prefab)
 
 (define (simple-key value) (key value (set)))
 (define (S- value) (key value (set 'shift)))
@@ -84,6 +86,7 @@
     ["P" #:when (not params) (simple-key 'delete)] ;; st, http://st.suckless.org/
     ["P" (decode-shifting params 'f1)]
     ["Q" (decode-shifting params 'f2)]
+    ["R" #:when (and (= (length params) 2) (> (car params) 1)) (apply position-report params)]
     ["R" (decode-shifting params 'f3)]
     ["S" (decode-shifting params 'f4)]
     ["Z" (C-S- #\I)] ;; TODO: should this instead be a 'backtab key?
