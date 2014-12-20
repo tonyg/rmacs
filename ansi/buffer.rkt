@@ -3,6 +3,8 @@
 (require "rope.rkt")
 (require "search.rkt")
 
+(define main-mark-type (mark-type "main" 'right))
+
 (struct buffer ([rope #:mutable]
                 [pos #:mutable]
                 ) #:transparent)
@@ -23,11 +25,11 @@
 (define (buffer-move-by! buf delta)
   (buffer-move-to! buf (+ (buffer-pos buf) delta)))
 
-(define (buffer-mark! buf [mark 'mark] #:position [pos (buffer-pos buf)] #:value [value #t])
-  (buffer-lift0 replace-mark buf mark pos value))
+(define (buffer-mark! buf [mtype main-mark-type] #:position [pos (buffer-pos buf)] #:value [value #t])
+  (buffer-lift0 replace-mark buf mtype pos value))
 
 (define (buffer-search* buf start-pos forward? move? find-delta)
-  (define-values (l _marks r) (rope-split (buffer-rope buf) start-pos))
+  (define-values (l r) (rope-split (buffer-rope buf) start-pos))
   (define delta (find-delta (if forward? r l)))
   (define new-pos (+ start-pos (cond [(not delta) 0] [forward? delta] [else (- delta)])))
   (when delta
@@ -69,12 +71,12 @@
 ;; will end up at a configurable percentage of the way down the
 ;; window.
 ;;
-;; Mark Location Buffer -> Buffer
+;; MarkType Location Buffer -> Buffer
 ;; Ensures the given mark is sanely positioned as a top-of-window mark
 ;; with respect to the given cursor position.
-(define (frame-buffer! top-of-window-mark cursor-position window-height buf
+(define (frame-buffer! top-of-window-mtype cursor-position window-height buf
                        #:preferred-position-fraction [preferred-position-fraction 1/2])
-  (define old-top-of-window-pos (find-next-mark-pos (buffer-rope buf) top-of-window-mark))
+  (define old-top-of-window-pos (find-next-mark-pos (buffer-rope buf) top-of-window-mtype))
   (define preferred-distance-from-bottom (ceiling (* window-height (- 1 preferred-position-fraction))))
   (let loop ((pos (buffer-find buf "\n" #:forward? #f #:move? #f))
              (line-count 0)
@@ -85,7 +87,7 @@
      [(<= pos old-top-of-window-pos)
       buf]
      [(= line-count window-height)
-      (buffer-mark! buf top-of-window-mark #:position new-top-of-window-pos)]
+      (buffer-mark! buf top-of-window-mtype #:position new-top-of-window-pos)]
      [else
       (loop (buffer-find buf "\n" #:forward? #f #:move? #f #:position (- pos 1))
             (+ line-count 1)
