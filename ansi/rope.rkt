@@ -21,13 +21,17 @@
          subrope*
          subrope
          rope-generator
+         rope-seek
 
          has-mark?
          find-next-mark
          find-prev-mark
+         find-next-mark-pos
+         find-prev-mark-pos
          find-all-marks
          set-mark
-         clear-mark)
+         clear-mark
+         replace-mark)
 
 (require racket/set)
 (require racket/match)
@@ -234,6 +238,11 @@
 (define (find-next-mark r mark [pos 0]) (find-mark* r #t mark pos))
 (define (find-prev-mark r mark [pos (rope-size r)]) (find-mark* r #f mark pos))
 
+(define (find-next-mark-pos r mark [pos 0])
+  (cond [(find-mark r #t mark pos) => car] [else #f]))
+(define (find-prev-mark-pos r mark [pos (rope-size r)])
+  (cond [(find-mark r #f mark pos) => car] [else #f]))
+
 (define (mark-union h1 h2 offset)
   (for/fold [(h h1)] [((pos val) (in-hash h2))] (hash-set h (+ offset pos) val)))
 
@@ -285,6 +294,11 @@
                         (if (hash-empty? new-mark)
                             (hash-remove old-marks mark)
                             (hash-set old-marks mark new-mark)))]))))
+
+(define (replace-mark r0 mark new-pos new-value)
+  (define pos (find-next-mark-pos r0 mark))
+  (when (not pos) (error 'replace-mark "Mark ~a not found" mark))
+  (set-mark (clear-mark r0 mark pos) mark new-pos new-value))
 
 (define (rope-size r)
   (if r (rope-size* r) 0))
@@ -387,6 +401,9 @@
                             ((negative? i))
                           (yield (string-ref text (+ offset i)))))
                       (outer (rope-left r))))))))
+
+(define (rope-seek r0 pos)
+  (splay-to-pos 'rope-seek r0 pos))
 
 ;; (require racket/trace)
 ;; (trace splay-to find-position rope-concat rope-append rope-split rope->string)
