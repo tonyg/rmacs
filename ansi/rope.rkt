@@ -26,14 +26,13 @@
          (struct-out mark-type)
 
          has-mark?
-         find-next-mark
-         find-prev-mark
-         find-next-mark-pos
-         find-prev-mark-pos
-         find-all-marks
+         find-mark
+         find-mark-pos
+         find-all-marks/type
          set-mark
          clear-mark
-         replace-mark)
+         replace-mark
+         clear-all-marks)
 
 (require racket/set)
 (require racket/match)
@@ -63,8 +62,8 @@
               left ;; Rope or #f
               right ;; Rope or #f
               size* ;; Number, total length of this rope
-              marks* ;; Set of Mark
-              mark-index ;; (Hash Mark (Hash Number (Setof Any))), marks in this span
+              marks* ;; Set of MarkType
+              mark-index ;; (Hash MarkType (Hash Number (Setof Any))), marks in this span
               ) #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -207,7 +206,7 @@
 
 ;; Searches from pos (inclusive) in the direction indicated.
 ;; Pos points to a mark-position, not a character-position.
-(define (find-mark r forward? mtype start-pos)
+(define (find-mark* r forward? mtype start-pos)
   (define (search-here r start-pos)
     (define marks (hash-ref (rope-mark-index r) mtype #f))
     (define lo (rope-lo r))
@@ -239,24 +238,24 @@
 (define (has-mark? r mtype)
   (and r (set-member? (rope-marks r) mtype)))
 
-(define (find-mark* r forward? mtype start-pos)
-  (define maybe-pos+val (find-mark r forward? mtype start-pos))
+(define (find-mark r mtype
+                   #:forward? [forward? #t]
+                   #:position [start-pos (if forward? 0 (rope-size r))])
+  (define maybe-pos+val (find-mark* r forward? mtype start-pos))
   (if maybe-pos+val
       (values (car maybe-pos+val) (cdr maybe-pos+val))
       (values #f #f)))
 
-(define (find-next-mark r mtype [pos 0]) (find-mark* r #t mtype pos))
-(define (find-prev-mark r mtype [pos (rope-size r)]) (find-mark* r #f mtype pos))
-
-(define (find-next-mark-pos r mtype [pos 0])
-  (cond [(find-mark r #t mtype pos) => car] [else #f]))
-(define (find-prev-mark-pos r mtype [pos (rope-size r)])
-  (cond [(find-mark r #f mtype pos) => car] [else #f]))
+(define (find-mark-pos r mtype
+                       #:forward? [forward? #t]
+                       #:position [start-pos (if forward? 0 (rope-size r))])
+  (cond [(find-mark* r forward? mtype start-pos) => car]
+        [else #f]))
 
 (define (mark-union h1 h2 offset)
   (for/fold [(h h1)] [((pos val) (in-hash h2))] (hash-set h (+ offset pos) val)))
 
-(define (find-all-marks r mtype)
+(define (find-all-marks/type r mtype)
   (define (walk r)
     (if (set-member? (rope-marks r) mtype)
         (let-values (((lo hi) (rope-lo+hi r)))
@@ -306,9 +305,17 @@
                             (hash-set old-marks mtype new-mark)))]))))
 
 (define (replace-mark r0 mtype new-pos new-value)
-  (define pos (find-next-mark-pos r0 mtype))
+  (define pos (find-mark-pos r0 mtype))
   (when (not pos) (error 'replace-mark "Mark ~a not found" mtype))
   (set-mark (clear-mark r0 mtype pos) mtype new-pos new-value))
+
+(define (clear-all-marks r)
+  (and r
+       (struct-copy rope r
+                    [marks* (set)]
+                    [mark-index (hash)]
+                    [left (clear-all-marks (rope-left r))]
+                    [right (clear-all-marks (rope-right r))])))
 
 (define (rope-size r)
   (if r (rope-size* r) 0))
@@ -448,42 +455,42 @@
 
     (let*-values (((r) (set-mark (rope-concat rope-pieces) mtype1 9 "original"))
                   ((_) (check-equal? (rope->string r) text))
-                  ((pos val) (find-next-mark r mtype1))
+                  ((pos val) (find-mark r mtype1))
                   ((_) (check-equal? pos 9))
                   ((_) (check-equal? val "original"))
                   ((r) (clear-mark r mtype1 pos))
-                  ((_) (check-equal? (find-all-marks r mtype1) (hash)))
-                  ((pos val) (find-next-mark r mtype1))
+                  ((_) (check-equal? (find-all-marks/type r mtype1) (hash)))
+                  ((pos val) (find-mark r mtype1))
                   ((_) (check-false pos))
                   ((_) (check-false val))
                   ((r) (set-mark r mtype1 9 "second"))
-                  ((pos val) (find-next-mark r mtype1))
+                  ((pos val) (find-mark r mtype1))
                   ((_) (check-equal? pos 9))
                   ((_) (check-equal? val "second"))
                   ((r) (set-mark r mtype1 6 "first"))
                   ((r) (set-mark r mtype2 6 "third"))
-                  ((_) (check-equal? (find-all-marks r mtype1) (hash 6 "first" 9 "second")))
-                  ((_) (check-equal? (find-all-marks r mtype2) (hash 6 "third")))
-                  ((pos val) (find-prev-mark r mtype1))
+                  ((_) (check-equal? (find-all-marks/type r mtype1) (hash 6 "first" 9 "second")))
+                  ((_) (check-equal? (find-all-marks/type r mtype2) (hash 6 "third")))
+                  ((pos val) (find-mark r mtype1 #:forward? #f))
                   ((_) (check-equal? pos 9))
                   ((_) (check-equal? val "second"))
-                  ((pos val) (find-next-mark r mtype1))
+                  ((pos val) (find-mark r mtype1))
                   ((_) (check-equal? pos 6))
                   ((_) (check-equal? val "first"))
                   ((l r) (rope-split r pos))
-                  ((_) (check-equal? (find-all-marks r mtype1) (hash 3 "second")))
-                  ((_) (check-equal? (find-all-marks l mtype1) (hash 6 "first")))
-                  ((_) (check-equal? (find-all-marks r mtype2) (hash 0 "third")))
-                  ((_) (check-equal? (find-all-marks l mtype2) (hash)))
+                  ((_) (check-equal? (find-all-marks/type r mtype1) (hash 3 "second")))
+                  ((_) (check-equal? (find-all-marks/type l mtype1) (hash 6 "first")))
+                  ((_) (check-equal? (find-all-marks/type r mtype2) (hash 0 "third")))
+                  ((_) (check-equal? (find-all-marks/type l mtype2) (hash)))
                   ((_) (check-equal? (rope->string l) (substring text 0 6)))
                   ((_) (check-equal? (rope->string r) (substring text 6 (string-length text))))
                   ((_) (check-equal? (rope-marks l) (set mtype1)))
                   ((_) (check-equal? (rope-marks r) (set mtype1 mtype2)))
                   ((l r) (rope-split r 3))
-                  ((_) (check-equal? (find-all-marks r mtype1) (hash)))
-                  ((_) (check-equal? (find-all-marks l mtype1) (hash 3 "second")))
-                  ((_) (check-equal? (find-all-marks r mtype2) (hash)))
-                  ((_) (check-equal? (find-all-marks l mtype2) (hash 0 "third")))
+                  ((_) (check-equal? (find-all-marks/type r mtype1) (hash)))
+                  ((_) (check-equal? (find-all-marks/type l mtype1) (hash 3 "second")))
+                  ((_) (check-equal? (find-all-marks/type r mtype2) (hash)))
+                  ((_) (check-equal? (find-all-marks/type l mtype2) (hash 0 "third")))
                   ((_) (check-equal? (rope->string l) (substring text 6 9)))
                   ((_) (check-equal? (rope->string r) (substring text 9 (string-length text)))))
       (void)))
