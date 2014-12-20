@@ -8,6 +8,7 @@
          strand-equal?
          strand-empty?
 
+         rope?
          empty-rope
          strand->rope
          string->rope
