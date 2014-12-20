@@ -20,6 +20,7 @@
          rope-concat
          subrope*
          subrope
+         rope-generator
 
          has-mark?
          find-next-mark
@@ -30,6 +31,7 @@
 
 (require racket/set)
 (require racket/match)
+(require racket/generator)
 
 (module+ test (require rackunit racket/pretty))
 
@@ -364,6 +366,27 @@
 (define (subrope r0 [lo0 #f] [hi0 #f])
   (define-values (_l m _r) (subrope* r0 lo0 hi0))
   m)
+
+(define (rope-generator r #:forward? [forward? #t])
+  (if forward?
+      (generator ()
+        (let outer ((r r))
+          (and r
+               (begin (outer (rope-left r))
+                      (match-let (((strand text offset count) (rope-strand r)))
+                        (do ((i 0 (+ i 1)))
+                            ((= i count))
+                          (yield (string-ref text (+ offset i)))))
+                      (outer (rope-right r))))))
+      (generator ()
+        (let outer ((r r))
+          (and r
+               (begin (outer (rope-right r))
+                      (match-let (((strand text offset count) (rope-strand r)))
+                        (do ((i (- count 1) (- i 1)))
+                            ((negative? i))
+                          (yield (string-ref text (+ offset i)))))
+                      (outer (rope-left r))))))))
 
 ;; (require racket/trace)
 ;; (trace splay-to find-position rope-concat rope-append rope-split rope->string)
