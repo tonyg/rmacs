@@ -18,6 +18,7 @@
          rope-split
          rope-append
          rope-concat
+         subrope*
          subrope
 
          has-mark?
