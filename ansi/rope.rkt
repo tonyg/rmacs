@@ -21,17 +21,19 @@
          subrope
 
          has-mark?
-         lookup-mark
+         find-next-mark
+         find-prev-mark
+         find-all-marks
          set-mark
-         clear-mark
-         update-mark)
+         clear-mark)
 
 (require racket/set)
 (require racket/match)
 
 (module+ test (require rackunit racket/pretty))
 
-;; A Mark is a Symbol.
+;; A Mark is a Symbol. Marks can be associated with a set of Any
+;; values at each position in the rope.
 
 ;; A Strand is a (strand String Number Number), representing a
 ;; substring of a string.
@@ -45,7 +47,7 @@
               right ;; Rope or #f
               size* ;; Number, total length of this rope
               marks* ;; Set of Mark
-              mark-index ;; Hashtable from Mark to Number, marks in this span
+              mark-index ;; (Hasheq Mark (Hash Number (Setof Any))), marks in this span
               ) #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -106,7 +108,7 @@
 (define (empty-rope) #f)
 
 (define (strand->rope t)
-  (rope t #f #f (strand-count t) (set) (hash)))
+  (rope t #f #f (strand-count t) (seteq) (hasheq)))
 
 (define (string->rope s)
   (strand->rope (string->strand s)))
@@ -186,58 +188,106 @@
          [(< pos hi) (values 'here #t)]
          [else (values 'right (- pos hi))]))))
 
-(define (find-mark mark)
-  (define (walk offset r)
-    (cond
-     [(not r)
-      (values 'here #f)]
-     [(hash-ref (rope-mark-index r) mark #f) =>
-      (lambda (p) (values 'here (+ offset (rope-lo r) p)))]
-     [(set-member? (rope-marks (rope-left r)) mark)
-      (values 'left offset)]
-     [(set-member? (rope-marks (rope-right r)) mark)
-      (values 'right (+ offset (rope-lo r) (strand-count (rope-strand r))))]
-     [else
-      (values 'here #f)]))
-  ;; (trace walk)
-  walk)
+;; Searches from pos (inclusive) in the direction indicated.
+;; Pos points to a mark-position, not a character-position.
+(define (find-mark r forward? mark start-pos)
+  (define (search-here r start-pos)
+    (define marks (hash-ref (rope-mark-index r) mark #f))
+    (define lo (rope-lo r))
+    (if (not marks)
+        #f
+        (let ((pos-comparer (if forward? < >))
+              (boundary-comparer (if forward? >= <=)))
+          (for/fold [(candidate #f)] [((pos value) (in-hash marks))]
+            (if (and (or (not candidate)
+                         (pos-comparer pos (car candidate)))
+                     (boundary-comparer pos start-pos))
+                (cons (+ pos lo) value)
+                candidate)))))
+  (define (search r start-pos)
+    (and r
+         (set-member? (rope-marks r) mark)
+         (let-values (((lo hi) (rope-lo+hi r)))
+           (cond
+            [(< start-pos lo)
+             (or (search (rope-left r) start-pos)
+                 (and forward? (search-here r (- start-pos lo))))]
+            [(> start-pos hi)
+             (or (search (rope-right r) (- start-pos hi))
+                 (and (not forward?) (search-here r (- start-pos lo))))]
+            [else
+             (search-here r (- start-pos lo))]))))
+  (search r start-pos))
 
 (define (has-mark? r mark)
   (and r (set-member? (rope-marks r) mark)))
 
-(define (lookup-mark r mark)
-  (splay-to r (find-mark mark) 0))
+(define (find-mark* r forward? mark start-pos)
+  (define maybe-pos+val (find-mark r forward? mark start-pos))
+  (if maybe-pos+val
+      (values (car maybe-pos+val) (cdr maybe-pos+val))
+      (values #f #f)))
 
-(define (set-mark r0 mark position)
-  (when (set-member? (rope-marks r0) mark) (error 'set-mark "Duplicate mark: ~a" mark))
-  (define-values (found? r1) (splay-to r0 find-position position))
-  (when (not found?) (error 'set-mark "Invalid position ~a setting mark ~a" position mark))
+(define (find-next-mark r mark [pos 0]) (find-mark* r #t mark pos))
+(define (find-prev-mark r mark [pos (rope-size r)]) (find-mark* r #f mark pos))
+
+(define (mark-union h1 h2 offset)
+  (for/fold [(h h1)] [((pos val) (in-hash h2))] (hash-set h (+ offset pos) val)))
+
+(define (find-all-marks r mark)
+  (define (walk r)
+    (if (set-member? (rope-marks r) mark)
+        (let-values (((lo hi) (rope-lo+hi r)))
+          (mark-union (walk (rope-left r))
+                      (mark-union (hash-ref (rope-mark-index r) mark (lambda () (hash)))
+                                  (walk (rope-right r))
+                                  hi)
+                      lo))
+        (hash)))
+  (walk r))
+
+(define (splay-to-pos what r0 pos [extra (lambda () "")])
+  (define-values (found? r1) (splay-to r0 find-position pos))
+  (when (not found?) (error what "Invalid position ~a~a" pos (extra)))
+  r1)
+
+(define (add-mark-to-table old-marks mark pos value)
+  (define old-mark (hash-ref old-marks mark (lambda () (hash))))
+  (hash-set old-marks mark (hash-set old-mark pos value)))
+
+(define (set-mark r0 mark position value)
+  (define r (splay-to-pos 'set-mark r0 position (lambda () (format " setting mark ~a" mark))))
   (reindex
-   (if (not r1)
-       (rope (empty-strand) #f #f 'will-be-recomputed 'will-be-recomputed (hash mark position))
-       (struct-copy rope r1
-                    [mark-index (hash-set (rope-mark-index r1) mark (- position (rope-lo r1)))]))))
+   (if (not r)
+       (rope (empty-strand)
+             #f
+             #f
+             'will-be-recomputed
+             'will-be-recomputed
+             (hasheq mark (hash position value)))
+       (struct-copy rope r [mark-index (add-mark-to-table (rope-mark-index r)
+                                                          mark
+                                                          (- position (rope-lo r))
+                                                          value)]))))
 
-(define (clear-mark r0 mark)
-  (define-values (old-pos r) (lookup-mark r0 mark))
-  (if old-pos
-      (struct-copy rope r
-                   [marks* (set-remove (rope-marks* r) mark)]
-                   [mark-index (hash-remove (rope-mark-index r) mark)])
-      r))
-
-(define (update-mark r0 mark position)
-  (set-mark (if (has-mark? r0 mark)
-                (clear-mark r0 mark)
-                r0)
-            mark
-            position))
+(define (clear-mark r0 mark position)
+  (define r (splay-to-pos 'clear-mark r0 position (lambda () (format " clearing mark ~a" mark))))
+  (and r
+       (reindex
+        (struct-copy rope r
+                     [mark-index
+                      (let* ((old-marks (rope-mark-index r))
+                             (old-mark (hash-ref old-marks mark (lambda () (hash)))))
+                        (define new-mark (hash-remove old-mark position))
+                        (if (hash-empty? new-mark)
+                            (hash-remove old-marks mark)
+                            (hash-set old-marks mark new-mark)))]))))
 
 (define (rope-size r)
   (if r (rope-size* r) 0))
 
 (define (rope-marks r)
-  (if r (rope-marks* r) (set)))
+  (if r (rope-marks* r) (seteq)))
 
 (define (reindex r)
   (struct-copy rope r
@@ -246,11 +296,10 @@
                          (strand-count (rope-strand r)))]
                [marks* (set-union (rope-marks (rope-left r))
                                   (rope-marks (rope-right r))
-                                  (list->set (hash-keys (rope-mark-index r))))]))
+                                  (list->seteq (hash-keys (rope-mark-index r))))]))
 
 (define (rope-split r0 position)
-  (define-values (found? r) (splay-to r0 find-position position))
-  (when (not found?) (error 'rope-split "Invalid position ~a" position))
+  (define r (splay-to-pos 'rope-split r0 position))
   ;; We know the position is in the root of r.
   (match-define (rope t rl rr size marks mark-index) r)
   (define-values (lo hi) (rope-lo+hi r))
@@ -261,18 +310,19 @@
   (define right-strand (substrand t offset))
   (values (if (strand-empty? left-strand)
               rl
-              (reindex (rope left-strand rl #f 'will-be-recomputed (set) left-index)))
+              (reindex (rope left-strand rl #f 'will-be-recomputed (seteq) left-index)))
           marks-at-split
           (if (strand-empty? right-strand)
               rr
-              (reindex (rope right-strand #f rr 'will-be-recomputed (set) right-index)))))
+              (reindex (rope right-strand #f rr 'will-be-recomputed (seteq) right-index)))))
 
 (define (partition-mark-index index offset)
-  (for/fold [(l (hash)) (m (set)) (r (hash))]
-            [((mark pos) (in-hash index))]
-    (values (if (< pos offset) (hash-set l mark pos) l)
-            (if (= pos offset) (set-add m mark) m)
-            (if (> pos offset) (hash-set r mark (- pos offset)) r))))
+  (for*/fold [(l (hasheq)) (m (hasheq)) (r (hasheq))]
+             [((mark posvals) (in-hash index))
+              ((pos val) (in-hash posvals))]
+    (values (if (< pos offset) (add-mark-to-table l mark pos val) l)
+            (if (= pos offset) (hash-set m mark (set-add (hash-ref m mark (set)) val)) m)
+            (if (> pos offset) (add-mark-to-table r mark (- pos offset) val) r))))
 
 (define (rope-append rl0 rr0)
   (cond
@@ -287,17 +337,17 @@
         (let ((merged-index (merge-mark-indexes (rope-mark-index rl)
                                                 (rope-mark-index rr)
                                                 (strand-count (rope-strand rl)))))
-          (reindex (rope t (rope-left rl) (rope-right rr) 'will-be-recomputed (set) merged-index)))
+          (reindex (rope t (rope-left rl) (rope-right rr) 'will-be-recomputed (seteq) merged-index)))
         (replace-right rl rr))]))
 
 (define (rope-concat rs)
   (foldr rope-append (empty-rope) rs))
 
 (define (merge-mark-indexes li ri offset)
-  (for/fold [(i li)] [((k v) (in-hash ri))]
-    (if (hash-has-key? i k)
-        (error 'merge-mark-indexes "Duplicate mark: ~a" k)
-        (hash-set i k (+ offset v)))))
+  (for*/fold [(i li)]
+             [((mark posvals) (in-hash ri))
+              ((pos val) (in-hash posvals))]
+    (add-mark-to-table i mark (+ pos offset) val)))
 
 (define (subrope* r0 [lo0 #f] [hi0 #f])
   (define lo (if (not lo0)
@@ -341,25 +391,38 @@
         (check-equal? (rope->string r) text)
         (loop (- n 1) r)))
 
-    (let*-values (((r) (set-mark (rope-concat rope-pieces) 'mark 9))
+    (let*-values (((r) (set-mark (rope-concat rope-pieces) 'mark 9 "original"))
                   ((_) (check-equal? (rope->string r) text))
-                  ((pos r) (lookup-mark r 'mark))
+                  ((pos val) (find-next-mark r 'mark))
                   ((_) (check-equal? pos 9))
-                  ((r) (clear-mark r 'mark))
-                  ((pos r) (lookup-mark r 'mark))
+                  ((_) (check-equal? val "original"))
+                  ((r) (clear-mark r 'mark pos))
+                  ((_) (check-equal? (find-all-marks r 'mark) (hash)))
+                  ((pos val) (find-next-mark r 'mark))
                   ((_) (check-false pos))
-                  ((r) (update-mark r 'mark 9))
-                  ((pos r) (lookup-mark r 'mark))
+                  ((_) (check-false val))
+                  ((r) (set-mark r 'mark 9 "second"))
+                  ((pos val) (find-next-mark r 'mark))
                   ((_) (check-equal? pos 9))
-                  ((r) (update-mark r 'mark 6))
-                  ((pos r) (lookup-mark r 'mark))
+                  ((_) (check-equal? val "second"))
+                  ((r) (set-mark r 'mark 6 "first"))
+                  ((_) (check-equal? (find-all-marks r 'mark) (hash 6 "first" 9 "second")))
+                  ((pos val) (find-prev-mark r 'mark))
+                  ((_) (check-equal? pos 9))
+                  ((_) (check-equal? val "second"))
+                  ((pos val) (find-next-mark r 'mark))
                   ((_) (check-equal? pos 6))
+                  ((_) (check-equal? val "first"))
                   ((l ms r) (rope-split r pos))
-                  ((_) (check-equal? ms (set 'mark)))
+                  ((_) (check-equal? (find-all-marks r 'mark) (hash 3 "second")))
+                  ((_) (check-equal? ms (hasheq 'mark (set "first"))))
                   ((_) (check-equal? (rope->string l) (substring text 0 6)))
                   ((_) (check-equal? (rope->string r) (substring text 6 (string-length text))))
+                  ((_) (check-equal? (rope-marks l) (seteq)))
+                  ((_) (check-equal? (rope-marks r) (seteq 'mark)))
                   ((l ms r) (rope-split r 3))
-                  ((_) (check-equal? ms (set)))
+                  ((_) (check-equal? (find-all-marks r 'mark) (hash)))
+                  ((_) (check-equal? ms (hasheq 'mark (set "second"))))
                   ((_) (check-equal? (rope->string l) (substring text 6 9)))
                   ((_) (check-equal? (rope->string r) (substring text 9 (string-length text)))))
       (void)))
