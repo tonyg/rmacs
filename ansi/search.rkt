@@ -3,10 +3,14 @@
 
 (provide search-generator
          search-string
-         search-rope)
+         search-rope
+         find-in-generator
+         find-in-rope)
 
-(require "rope.rkt")
+(require racket/set)
+(require racket/match)
 (require racket/generator)
+(require "rope.rkt")
 
 (define (table pattern)
   (define t (make-vector (- (string-length pattern) 1)))
@@ -77,6 +81,21 @@
                                                (rope-generator haystack #:forward? #f))))
         (and reversed-result (- (rope-size haystack) reversed-result (string-length needle))))))
 
+(define (find-in-generator delims0 gen)
+  (define delims (if (set? delims0) delims0 (list->set (string->list delims0))))
+  (let loop ((count 0))
+    (match (gen)
+      [(? char? c)
+       (if (set-member? delims c)
+           count
+           (loop (+ count 1)))]
+      [_ count])))
+
+(define (find-in-rope delims r #:forward? [forward? #t])
+  (if forward?
+      (find-in-generator delims (rope-generator r))
+      (- (rope-size r) (find-in-generator delims (rope-generator r #:forward? #f)))))
+
 (module+ test
   (require rackunit)
   (check-equal? (table "ABCDABD")
@@ -106,4 +125,11 @@
   (check-equal? (search-rope "man may" prejudice-rope) 171)
   (check-equal? (search-rope "man may" prejudice-rope #:forward? #f) 171)
   (check-equal? (search-rope "xylophone" prejudice-rope) #f)
-  (check-equal? (search-rope "xylophone" prejudice-rope #:forward? #f) #f))
+  (check-equal? (search-rope "xylophone" prejudice-rope #:forward? #f) #f)
+
+  (check-equal? (find-in-rope "\n" prejudice-rope) 116)
+  (check-equal? (find-in-rope "at" prejudice-rope) 1)
+  (check-equal? (find-in-rope "z" prejudice-rope) (rope-size prejudice-rope))
+  (check-equal? (find-in-rope "\n" prejudice-rope #:forward? #f) (rope-size prejudice-rope))
+  (check-equal? (find-in-rope "at" prejudice-rope #:forward? #f) (- (rope-size prejudice-rope) 2))
+  (check-equal? (find-in-rope "z" prejudice-rope #:forward? #f) 0))
