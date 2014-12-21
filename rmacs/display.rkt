@@ -45,8 +45,8 @@
                lex-lcd-input
                24
                80
-               1
-               1
+               0
+               0
                color-white
                color-black
                #f
@@ -55,7 +55,7 @@
     (plumber-add-flush! (current-plumber)
                         (lambda (h)
                           (tty-style-reset *stdin-tty*)
-                          (tty-goto *stdin-tty* (tty-rows *stdin-tty*) 1))))
+                          (tty-goto *stdin-tty* (- (tty-rows *stdin-tty*) 1) 0))))
   *stdin-tty*)
 
 (define (tty-display tty . items)
@@ -63,9 +63,9 @@
   (flush-output (tty-output tty)))
 
 (define (tty-goto tty row0 column0)
-  (define row (max 1 (min (tty-rows tty) row0)))
-  (define column (max 1 (min (tty-columns tty) column0)))
-  (tty-display tty (goto row column))
+  (define row (max 0 (min (- (tty-rows tty) 1) row0)))
+  (define column (max 0 (min (- (tty-columns tty) 1) column0)))
+  (tty-display tty (goto (+ row 1) (+ column 1)))
   (set-tty-cursor-row! tty row)
   (set-tty-cursor-column! tty column)
   tty)
@@ -73,8 +73,8 @@
 (define (tty-clear tty)
   (tty-style tty) ;; applies style from tty
   (tty-display tty (clear-screen/home))
-  (set-tty-cursor-row! tty 1)
-  (set-tty-cursor-column! tty 1)
+  (set-tty-cursor-row! tty 0)
+  (set-tty-cursor-column! tty 0)
   tty)
 
 (define (tty-style tty
