@@ -8,7 +8,8 @@
          strand-equal?
          strand-empty?
 
-         rope?
+         (rename-out [rope?* rope?])
+         rope-empty?
          empty-rope
          strand->rope
          string->rope
@@ -19,7 +20,6 @@
          rope-split
          rope-append
          rope-concat
-         subrope*
          subrope
          rope-generator
          rope-seek
@@ -83,14 +83,15 @@
       text
       (substring text offset (+ offset count))))
 
+(define (compute-index index default limit)
+  (cond [(not index) default]
+        [(zero? limit) 0]
+        [else (modulo index limit)]))
+
 (define (substrand t0 [lo0 #f] [hi0 #f])
   (define t (if (string? t0) (string->strand t0) t0))
-  (define lo (if (not lo0)
-                 0
-                 (modulo lo0 (strand-count t))))
-  (define hi (if (not hi0)
-                 (strand-count t)
-                 (modulo hi0 (strand-count t))))
+  (define lo (compute-index lo0 0 (strand-count t)))
+  (define hi (compute-index hi0 (strand-count t) (strand-count t)))
   (strand (strand-text t)
           (+ (strand-offset t) lo)
           (- hi lo)))
@@ -124,8 +125,15 @@
 
 (define (empty-rope) #f)
 
+(define (rope-empty? r)
+  (equal? r (empty-rope)))
+
+(define (rope?* r)
+  (or (rope-empty? r)
+      (rope? r)))
+
 (define (strand->rope t)
-  (rope t #f #f (strand-count t) (seteq) (hasheq)))
+  (rope t (empty-rope) (empty-rope) (strand-count t) (seteq) (hasheq)))
 
 (define (string->rope s)
   (strand->rope (string->strand s)))
@@ -197,7 +205,7 @@
   (values lo (+ lo (strand-count (rope-strand r)))))
 
 (define (find-position pos r)
-  (if (not r)
+  (if (rope-empty? r)
       (values 'here (zero? pos))
       (let-values (((lo hi) (rope-lo+hi r)))
         (cond
@@ -280,10 +288,10 @@
 (define (set-mark r0 mtype position value)
   (define r (splay-to-pos 'set-mark r0 position (lambda () (format " setting mark ~a" mtype))))
   (reindex
-   (if (not r)
+   (if (rope-empty? r)
        (rope (empty-strand)
-             #f
-             #f
+             (empty-rope)
+             (empty-rope)
              'will-be-recomputed
              'will-be-recomputed
              (hasheq mtype (hash position value)))
@@ -334,20 +342,23 @@
                                   (list->seteq (hash-keys (rope-mark-index r))))]))
 
 (define (rope-split r0 position)
-  (define r (splay-to-pos 'rope-split r0 position))
-  ;; We know the position is in the root of r.
-  (match-define (rope t rl rr size marks mark-index) r)
-  (define-values (lo hi) (rope-lo+hi r))
-  (define offset (- position lo))
-  (define-values (left-index right-index) (partition-mark-index mark-index offset))
-  (define left-strand (substrand t 0 offset))
-  (define right-strand (substrand t offset))
-  (values (if (strand-empty? left-strand)
-              rl
-              (reindex (rope left-strand rl #f 'will-be-recomputed (seteq) left-index)))
-          (if (strand-empty? right-strand)
-              rr
-              (reindex (rope right-strand #f rr 'will-be-recomputed (seteq) right-index)))))
+  (match (splay-to-pos 'rope-split r0 position)
+    [(? rope-empty?) (values (empty-rope) (empty-rope))]
+    [(and r (rope t rl rr size marks mark-index))
+     ;; We know the position is in the root of r.
+     (define-values (lo hi) (rope-lo+hi r))
+     (define offset (- position lo))
+     (define-values (left-index right-index) (partition-mark-index mark-index offset))
+     (define left-strand (substrand t 0 offset))
+     (define right-strand (substrand t offset))
+     (values (if (strand-empty? left-strand)
+                 rl
+                 (reindex
+                  (rope left-strand rl (empty-rope) 'will-be-recomputed (seteq) left-index)))
+             (if (strand-empty? right-strand)
+                 rr
+                 (reindex
+                  (rope right-strand (empty-rope) rr 'will-be-recomputed (seteq) right-index))))]))
 
 (define (partition-mark-index index offset)
   (for*/fold [(l (hasheq)) (r (hasheq))]
@@ -362,12 +373,12 @@
 
 (define (rope-append rl0 rr0)
   (cond
-   [(not rl0) rr0]
-   [(not rr0) rl0]
+   [(rope-empty? rl0) rr0]
+   [(rope-empty? rr0) rl0]
    [else
     (define-values (_l rl) (splay-to rl0 find-position (rope-size rl0)))
     (define-values (_r rr) (splay-to rr0 find-position 0))
-    ;; Both rl's right and rr's left are #f.
+    ;; Both rl's right and rr's left are (empty-rope).
     (define t (strand-maybe-append (rope-strand rl) (rope-strand rr)))
     (if t
         (let ((merged-index (merge-mark-indexes (rope-mark-index rl)
@@ -385,19 +396,11 @@
               ((pos val) (in-hash posvals))]
     (add-mark-to-table i mtype (+ pos offset) val)))
 
-(define (subrope* r0 [lo0 #f] [hi0 #f])
-  (define lo (if (not lo0)
-                 0
-                 (modulo lo0 (rope-size r0))))
-  (define hi (if (not hi0)
-                 (rope-size r0)
-                 (modulo hi0 (rope-size r0))))
-  (define-values (_l left-marks-at-split mr) (rope-split r0 lo))
-  (define-values (m right-marks-at-split _r) (rope-split mr (- hi lo)))
-  (values left-marks-at-split m right-marks-at-split))
-
 (define (subrope r0 [lo0 #f] [hi0 #f])
-  (define-values (_l m _r) (subrope* r0 lo0 hi0))
+  (define lo (compute-index lo0 0 (rope-size r0)))
+  (define hi (compute-index hi0 (rope-size r0) (rope-size r0)))
+  (define-values (_l mr) (rope-split r0 lo))
+  (define-values (m _r) (rope-split mr (- hi lo)))
   m)
 
 (define (rope-generator r #:forward? [forward? #t])
@@ -511,4 +514,7 @@
   (test-with-pieces (list "hello" ", " "world"))
   (test-with-pieces prejudice-pieces)
   (test-with-pieces (atomize-pieces prejudice-pieces))
+
+  (check-equal? (call-with-values (lambda () (rope-split (empty-rope) 0)) list)
+                (list (empty-rope) (empty-rope)))
   )
