@@ -4,8 +4,8 @@
 (provide search-generator
          search-string
          search-rope
-         find-in-generator
-         find-in-rope)
+         findf-in-generator
+         findf-in-rope)
 
 (require racket/set)
 (require racket/match)
@@ -81,20 +81,19 @@
                                                (rope-generator haystack #:forward? #f))))
         (and reversed-result (- (rope-size haystack) reversed-result (string-length needle))))))
 
-(define (find-in-generator delims0 gen)
-  (define delims (if (set? delims0) delims0 (list->set (string->list delims0))))
+(define (findf-in-generator f gen)
   (let loop ((count 0))
     (match (gen)
       [(? char? c)
-       (if (set-member? delims c)
+       (if (f c)
            count
            (loop (+ count 1)))]
       [_ count])))
 
-(define (find-in-rope delims r #:forward? [forward? #t])
+(define (findf-in-rope f r #:forward? [forward? #t])
   (if forward?
-      (find-in-generator delims (rope-generator r))
-      (- (rope-size r) (find-in-generator delims (rope-generator r #:forward? #f)))))
+      (findf-in-generator f (rope-generator r))
+      (- (rope-size r) (findf-in-generator f (rope-generator r #:forward? #f)))))
 
 (module+ test
   (require rackunit)
@@ -126,6 +125,10 @@
   (check-equal? (search-rope "man may" prejudice-rope #:forward? #f) 171)
   (check-equal? (search-rope "xylophone" prejudice-rope) #f)
   (check-equal? (search-rope "xylophone" prejudice-rope #:forward? #f) #f)
+
+  (define (find-in-rope delims r)
+    (define chs (list->set (string->list delims)))
+    (findf-in-rope (lambda (c) (set-member? chs c)) r))
 
   (check-equal? (find-in-rope "\n" prejudice-rope) 116)
   (check-equal? (find-in-rope "at" prejudice-rope) 1)

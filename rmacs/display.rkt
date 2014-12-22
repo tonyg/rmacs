@@ -1,9 +1,13 @@
 #lang racket/base
 
 (provide (struct-out tty)
+         tty-last-row
+         tty-last-column
          stdin-tty
          tty-display
+         tty-newline
          tty-clear
+         tty-clear-to-eol
          tty-reset
          tty-goto
          tty-style
@@ -35,6 +39,9 @@
              [italic? #:mutable] ;; Boolean
              ) #:transparent)
 
+(define (tty-last-row t) (- (tty-rows t) 1))
+(define (tty-last-column t) (- (tty-columns t) 1))
+
 (define *stdin-tty* #f)
 (define (stdin-tty)
   (when (not *stdin-tty*)
@@ -55,16 +62,19 @@
     (plumber-add-flush! (current-plumber)
                         (lambda (h)
                           (tty-style-reset *stdin-tty*)
-                          (tty-goto *stdin-tty* (- (tty-rows *stdin-tty*) 1) 0))))
+                          (tty-goto *stdin-tty* (tty-last-row *stdin-tty*) 0))))
   *stdin-tty*)
 
 (define (tty-display tty . items)
   (for ((i items)) (display i (tty-output tty)))
   (flush-output (tty-output tty)))
 
+(define (tty-newline tty)
+  (tty-display tty "\r\n"))
+
 (define (tty-goto tty row0 column0)
-  (define row (max 0 (min (- (tty-rows tty) 1) row0)))
-  (define column (max 0 (min (- (tty-columns tty) 1) column0)))
+  (define row (max 0 (min (tty-last-row tty) row0)))
+  (define column (max 0 (min (tty-last-column tty) column0)))
   (tty-display tty (goto (+ row 1) (+ column 1)))
   (set-tty-cursor-row! tty row)
   (set-tty-cursor-column! tty column)
@@ -75,6 +85,10 @@
   (tty-display tty (clear-screen/home))
   (set-tty-cursor-row! tty 0)
   (set-tty-cursor-column! tty 0)
+  tty)
+
+(define (tty-clear-to-eol tty)
+  (tty-display tty (clear-to-eol))
   tty)
 
 (define (tty-style tty

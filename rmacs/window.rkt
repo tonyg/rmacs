@@ -1,34 +1,40 @@
 #lang racket/base
 
-(require "buffer.rkt")
+(provide (except-out (struct-out window) window)
+         (struct-out absolute-size)
+         (struct-out relative-size)
+         make-window
+         window-split
+         )
 
-;; Finseth's book defines a C routine, Framer(), which is intended to
-;; ensure that the `top_of_window` mark, denoting the position where
-;; display should begin for the current window, is in a sane position.
-;; The mark is left alone unless the cursor is outside the currently
-;; displayed window, either above or below. If the mark needs to be
-;; moved, it is moved to a line such that the cursor, after redisplay,
-;; will end up at a configurable percentage of the way down the
-;; window.
-;;
-;; MarkType Location Buffer -> Buffer
-;; Ensures the given mark is sanely positioned as a top-of-window mark
-;; with respect to the given cursor position.
-(define (frame-buffer! top-of-window-mtype cursor-position window-height buf
-                       #:preferred-position-fraction [preferred-position-fraction 1/2])
-  (define old-top-of-window-pos (buffer-mark-pos buf top-of-window-mtype))
-  (define preferred-distance-from-bottom (ceiling (* window-height (- 1 preferred-position-fraction))))
-  (let loop ((pos (buffer-find buf "\n" #:forward? #f #:move? #f))
-             (line-count 0)
-             (top-of-window-pos old-top-of-window-pos))
-    (define new-top-of-window-pos
-      (if (= line-count preferred-distance-from-bottom) pos top-of-window-pos))
-    (cond
-     [(<= pos old-top-of-window-pos)
-      buf]
-     [(= line-count window-height)
-      (buffer-mark! buf top-of-window-mtype #:position new-top-of-window-pos)]
-     [else
-      (loop (buffer-find buf "\n" #:forward? #f #:move? #f #:position (- pos 1))
-            (+ line-count 1)
-            new-top-of-window-pos)])))
+(require racket/match)
+
+(require "buffer.rkt")
+(require "lists.rkt")
+
+;; A SizeSpec is either
+;; -- (absolute-size PositiveInteger), a specific size in screen rows
+;; -- (relative-size PositiveReal), a weighted window size
+(struct absolute-size (lines) #:prefab)
+(struct relative-size (weight) #:prefab)
+
+(struct window (id ;; Symbol
+                [buffer #:mutable] ;; Buffer
+                ) #:transparent)
+
+(define (make-window initial-buffer)
+  (window (gensym 'window)
+          initial-buffer))
+
+(define (scale-size s)
+  (match s
+    [(absolute-size _) s] ;; can't scale fixed-size windows
+    [(relative-size w) (relative-size (/ w 2))]))
+
+(define (window-split w ws #:proportional? [proportional? #f])
+  (replacef ws
+            (lambda (e) (eq? (car e) w))
+            (lambda (e)
+              (define new-size (if proportional? (cadr e) (scale-size (cadr e))))
+              (list (list w new-size)
+                    (list (make-window (window-buffer w)) new-size)))))

@@ -1,8 +1,19 @@
 #lang racket/base
 
-(provide main-mark-type
+(provide make-buffergroup
+         main-mark-type
          buffer?
          make-buffer
+         register-buffer!
+         lookup-buffer
+         file->buffer
+         buffer-rename!
+         buffer-reorder!
+         buffer-next
+         buffer-prev
+         buffer-pos
+         buffer-title
+         buffer-group
          buffer-size
          buffer-move-to!
          buffer-move-by!
@@ -14,20 +25,114 @@
          buffer-region-update!
          call-with-excursion
          buffer-search
-         buffer-find)
+         buffer-findf)
 
 (require "rope.rkt")
 (require "search.rkt")
+(require "circular-list.rkt")
+
+(require (only-in racket/string string-join))
+(require (only-in racket/path normalize-path))
+(require (only-in racket/file file->string))
 
 (define main-mark-type (mark-type "main" 'right))
 
+(struct buffergroup ([members #:mutable] ;; (CircularList Buffer)
+                     ) #:transparent)
+
 (struct buffer ([rope #:mutable]
                 [pos #:mutable]
+                [title #:mutable]
+                [group #:mutable] ;; (Option BufferGroup)
                 ) #:transparent)
 
-(define (make-buffer #:initial-contents [initial-contents ""])
-  (buffer (string->rope initial-contents)
-          0))
+(define (make-buffergroup)
+  (buffergroup circular-empty))
+
+(define (make-buffer group ;; (Option BufferGroup)
+                     title ;; String
+                     #:initial-contents [initial-contents ""])
+  (register-buffer! group (buffer (string->rope initial-contents)
+                                  0
+                                  title
+                                  #f)))
+
+(define (register-buffer! group buf)
+  (define old-group (buffer-group buf))
+  (when old-group
+    (set-buffergroup-members! old-group
+                              (circular-list-remove buf (buffergroup-members old-group) eq?))
+    (set-buffer-group! buf #f))
+  (cond
+   [(not group) buf]
+   [(title->buffer* group (buffer-title buf)) #f]
+   [else
+    (set-buffer-group! buf group)
+    (set-buffergroup-members! group (circular-cons buf (buffergroup-members group)))
+    buf]))
+
+(define (title->buffer* group title)
+  (and group
+       (circular-list-memf (lambda (b) (equal? (buffer-title b) title)) (buffergroup-members group))))
+
+(define (buffer->buffer* group b)
+  (and group
+       (circular-list-memf (lambda (b1) (eq? b b1)) (buffergroup-members group))))
+
+(define (lookup-buffer group title)
+  (cond [(title->buffer* group title) => circular-car] [else #f]))
+
+(define (title-exists-in-group? group title)
+  (and (title->buffer* group title) #t))
+
+;; (Option Group) Path -> String
+(define (filename->unique-buffer-title group filename)
+  (define pieces (reverse (map path->string (explode-path filename))))
+  (define primary-piece (car pieces))
+  (define uniquifiers (cdr pieces))
+  (if (not group)
+      primary-piece
+      (let search ((used '()) (remaining uniquifiers))
+        (define candidate
+          (if (null? used)
+              primary-piece
+              (format "~a<~a>" primary-piece (string-join used "/"))))
+        (if (title-exists-in-group? group candidate)
+            (if (pair? remaining)
+                (search (cons (car remaining) used) (cdr remaining))
+                (let search ((counter 2))
+                  (define candidate (format "~a<~a>" primary-piece counter))
+                  (if (title-exists-in-group? group candidate)
+                      (search (+ counter 1))
+                      candidate)))
+            candidate))))
+
+(define (file->buffer group filename)
+  (let* ((filename (normalize-path (simplify-path filename)))
+         (title (filename->unique-buffer-title group filename))
+         (b (make-buffer group title)))
+    (buffer-region-update! b
+                           (lambda (_dontcare) (string->rope (file->string filename)))
+                           #:point 0
+                           #:mark (buffer-size b))))
+
+(define (buffer-rename! b new-title)
+  (if (title-exists-in-group? (buffer-group b) new-title)
+      #f
+      (begin (set-buffer-title! b new-title)
+             b)))
+
+(define (buffer-reorder! b)
+  ;; Reorders b to the top of the group as a side-effect
+  (register-buffer! (buffer-group b) b))
+
+(define (buffer-next b)
+  (cond [(buffer->buffer* (buffer-group b) b) => (compose circular-car circular-list-rotate-forward)]
+        [else #f]))
+
+(define (buffer-prev b)
+  (cond [(buffer->buffer* (buffer-group b) b) => (compose circular-car circular-list-rotate-backward)]
+        [else #f]))
 
 (define (buffer-size buf) (rope-size (buffer-rope buf)))
 
@@ -111,16 +216,16 @@
 (define (buffer-search buf needle
                        #:position [start-pos (buffer-pos buf)]
                        #:forward? [forward? #t]
-                       #:move? [move? #t])
+                       #:move? [move? #f])
   (buffer-search* buf start-pos forward? move?
                   (lambda (piece) (search-rope needle piece #:forward? forward?))))
 
-(define (buffer-find buf delims
-                     #:position [start-pos (buffer-pos buf)]
-                     #:forward? [forward? #t]
-                     #:move? [move? #t])
+(define (buffer-findf buf f
+                      #:position [start-pos (buffer-pos buf)]
+                      #:forward? [forward? #t]
+                      #:move? [move? #f])
   (buffer-search* buf start-pos forward? move?
-                  (lambda (piece) (find-in-rope delims piece #:forward? forward?))))
+                  (lambda (piece) (findf-in-rope f piece #:forward? forward?))))
 
 (define (buffer-lift f buf . args)
   (define new-rope (apply f (buffer-rope buf) args))

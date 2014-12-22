@@ -1,20 +1,19 @@
 #lang racket/base
 
-(require "display.rkt")
+(require "editor.rkt")
+(require "render.rkt")
 (require racket/match)
 
 (define (main)
-  (define t (stdin-tty))
-  (tty-style t #:bold? #t #:background-color color-blue)
-  (tty-display t (format "Your screen is ~a rows and ~a columns.\r\n"
-                         (tty-rows t)
-                         (tty-columns t)))
-  (tty-style t #:bold? #f #:italic? #t)
-  (tty-display t "Italic.\r\n")
-  (tty-style t #:bold? #t)
-  (tty-display t "Bold and italic.\r\n")
-  (tty-style t #:bold? #f #:italic? #f)
-  (tty-display t "Neither.\r\n"))
+  (with-handlers ([exn? (lambda (e)
+                          (local-require ansi)
+                          (tty-restore!)
+                          (raise e))])
+    (define e (make-editor))
+    (visit-file! e (build-path (collection-file-path "main.rkt" "rmacs")
+                               'up 'up "doc" "xterm_controls.txt"))
+    (render-editor! e))
+  (sleep 2))
 
 (module+ main
   (void (main)))
