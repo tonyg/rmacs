@@ -37,7 +37,7 @@
              [background-color #:mutable] ;; Nat
              [bold? #:mutable] ;; Boolean
              [italic? #:mutable] ;; Boolean
-             ) #:transparent)
+             ) #:prefab)
 
 (define (tty-last-row t) (- (tty-rows t) 1))
 (define (tty-last-column t) (- (tty-columns t) 1))

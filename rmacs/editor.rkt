@@ -14,7 +14,7 @@
 (struct editor (buffers ;; BufferGroup
                 [windows #:mutable] ;; (List (List Window SizeSpec)), abstract window layout
                 [active-window #:mutable] ;; (Option Window)
-                ) #:transparent)
+                ) #:prefab)
 
 (define (make-editor)
   (define g (make-buffergroup))

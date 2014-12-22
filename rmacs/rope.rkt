@@ -50,11 +50,11 @@
 
 ;; A MarkType is a (mark-type String Stickiness). MarkTypes can be
 ;; associated with a set of Any values at each position in the rope.
-(struct mark-type (name stickiness) #:transparent)
+(struct mark-type (name stickiness) #:prefab)
 
 ;; A Strand is a (strand String Number Number), representing a
 ;; substring of a string.
-(struct strand (text offset count) #:transparent)
+(struct strand (text offset count) #:prefab)
 
 ;; A Rope is a splay tree representing a long piece of text.
 ;; #f is the empty Rope; otherwise a (rope) struct instance.
@@ -65,7 +65,7 @@
               size* ;; Number, total length of this rope
               marks* ;; (Seteq MarkType)
               mark-index ;; (Hasheq MarkType (Hash Number (Set Any))), marks in this span
-              ) #:transparent)
+              ) #:prefab)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Strands

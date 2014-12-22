@@ -38,13 +38,13 @@
 (define main-mark-type (mark-type "main" 'right))
 
 (struct buffergroup ([members #:mutable] ;; (CircularList Buffer)
-                     ) #:transparent)
+                     ) #:prefab)
 
 (struct buffer ([rope #:mutable]
                 [pos #:mutable]
                 [title #:mutable]
                 [group #:mutable] ;; (Option BufferGroup)
-                ) #:transparent)
+                ) #:prefab)
 
 (define (make-buffergroup)
   (buffergroup circular-empty))

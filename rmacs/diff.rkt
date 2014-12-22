@@ -14,7 +14,7 @@
              (item xs)]
     (hash-set classes item (set-add (hash-ref classes item (lambda () (set))) i))))
 
-(struct candidate (x-index y-index chain) #:transparent)
+(struct candidate (x-index y-index chain) #:prefab)
 
 (define (longest-common-subsequence xs ys)
   (define ys-equivalence-classes (equivalence-classes ys))

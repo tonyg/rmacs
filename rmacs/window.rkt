@@ -20,7 +20,7 @@
 
 (struct window (id ;; Symbol
                 [buffer #:mutable] ;; Buffer
-                ) #:transparent)
+                ) #:prefab)
 
 (define (make-window initial-buffer)
   (window (gensym 'window)
