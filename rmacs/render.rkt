@@ -65,7 +65,8 @@
              (cursor-input-pos cursor-input-pos)
              (acc-rev '())
              (cursor-offset (if (zero? cursor-input-pos) 0 #f)))
-    (define (finish) (values (list->string (reverse acc-rev)) cursor-offset))
+    (define (finish) (values (list->string (reverse acc-rev))
+                             (if (zero? cursor-input-pos) (length acc-rev) cursor-offset)))
     (match chars
       ['() (finish)]
       [(cons c rest)
