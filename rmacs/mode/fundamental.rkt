@@ -14,7 +14,6 @@
 (define fundamental-mode (make-mode "fundamental"))
 
 (define-command fundamental-mode (self-insert-command e #:keyseq keyseq)
-  (log-info "self-insert-command ~a" (keyseq->keyspec keyseq))
   (match keyseq
     [(list (key (? char? ch) modifiers)) #:when (set-empty? (set-remove modifiers 'shift))
      (buffer-insert! (editor-active-buffer e) (string->rope (string ch)))]
