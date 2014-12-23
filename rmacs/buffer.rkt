@@ -6,6 +6,7 @@
          make-buffer
          register-buffer!
          lookup-buffer
+         unused-buffer-title
          file->buffer
          buffer-rename!
          buffer-reorder!
@@ -16,6 +17,7 @@
          buffer-group
          buffer-modeset
          buffer-column
+         buffer-apply-modeset!
          buffer-add-mode!
          buffer-remove-mode!
          buffer-toggle-mode!
@@ -33,6 +35,7 @@
          buffer-region
          buffer-region-update!
          buffer-insert!
+         buffer-replace-contents!
          call-with-excursion
          buffer-search
          buffer-findf)
@@ -61,10 +64,17 @@
 (define (make-buffergroup)
   (buffergroup circular-empty))
 
+(define (initial-contents-rope initial-contents)
+  (cond
+   [(string? initial-contents) (string->rope initial-contents)]
+   [(rope? initial-contents) initial-contents]
+   [(procedure? initial-contents) (initial-contents-rope (initial-contents))]
+   [else (error 'initial-contents-rope "Invalid initial-contents: ~v" initial-contents)]))
+
 (define (make-buffer group ;; (Option BufferGroup)
                      title ;; String
                      #:initial-contents [initial-contents ""])
-  (register-buffer! group (buffer (string->rope initial-contents)
+  (register-buffer! group (buffer (initial-contents-rope initial-contents)
                                   0
                                   title
                                   #f
@@ -98,36 +108,36 @@
 (define (title-exists-in-group? group title)
   (and (title->buffer* group title) #t))
 
+(define (unused-buffer-title group context-pieces)
+  (define primary-piece (if (null? context-pieces) "*anonymous*" (car context-pieces)))
+  (define uniquifiers (if (null? context-pieces) '() (cdr context-pieces)))
+  (let search ((used '()) (remaining uniquifiers))
+    (define candidate
+      (if (null? used)
+          primary-piece
+          (format "~a<~a>" primary-piece (string-join used "/"))))
+    (if (title-exists-in-group? group candidate)
+        (if (pair? remaining)
+            (search (cons (car remaining) used) (cdr remaining))
+            (let search ((counter 2))
+              (define candidate (format "~a<~a>" primary-piece counter))
+              (if (title-exists-in-group? group candidate)
+                  (search (+ counter 1))
+                  candidate)))
+        candidate)))
+
 ;; (Option Group) Path -> String
 (define (filename->unique-buffer-title group filename)
   (define pieces (reverse (map path->string (explode-path filename))))
-  (define primary-piece (car pieces))
-  (define uniquifiers (cdr pieces))
   (if (not group)
-      primary-piece
-      (let search ((used '()) (remaining uniquifiers))
-        (define candidate
-          (if (null? used)
-              primary-piece
-              (format "~a<~a>" primary-piece (string-join used "/"))))
-        (if (title-exists-in-group? group candidate)
-            (if (pair? remaining)
-                (search (cons (car remaining) used) (cdr remaining))
-                (let search ((counter 2))
-                  (define candidate (format "~a<~a>" primary-piece counter))
-                  (if (title-exists-in-group? group candidate)
-                      (search (+ counter 1))
-                      candidate)))
-            candidate))))
+      (car pieces)
+      (unused-buffer-title group pieces)))
 
 (define (file->buffer group filename)
   (let* ((filename (normalize-path (simplify-path filename)))
          (title (filename->unique-buffer-title group filename))
          (b (make-buffer group title)))
-    (buffer-region-update! b
-                           (lambda (_dontcare) (string->rope (file->string filename)))
-                           #:point 0
-                           #:mark (buffer-size b))
+    (buffer-replace-contents! b (string->rope (file->string filename)))
     (buffer-move-to! b 0)))
 
 (define (buffer-rename! b new-title)
@@ -152,6 +162,9 @@
 
 (define (buffer-column buf)
   (- (buffer-pos buf) (buffer-start-of-line buf)))
+
+(define (buffer-apply-modeset! buf modeset)
+  (set-buffer-modeset! buf modeset))
 
 (define (buffer-add-mode! buf mode)
   (set-buffer-modeset! buf (modeset-add-mode (buffer-modeset buf) mode)))
@@ -237,6 +250,9 @@
   (when (>= (buffer-pos buf) pos)
     (set-buffer-pos! buf (+ (buffer-pos buf) (rope-size content-rope))))
   buf)
+
+(define (buffer-replace-contents! buf content-rope)
+  (buffer-region-update! buf (lambda (_dontcare) content-rope) #:point 0 #:mark (buffer-size buf)))
 
 (define (call-with-excursion buf f)
   (define excursion (gensym 'excursion))

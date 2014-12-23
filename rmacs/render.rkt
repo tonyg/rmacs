@@ -59,6 +59,35 @@
              #:foreground-color color-black
              #:background-color color-white))
 
+(define (format-line line window-width cursor-input-pos)
+  (let loop ((chars (string->list line))
+             (remaining-width window-width)
+             (cursor-input-pos cursor-input-pos)
+             (acc-rev '())
+             (cursor-offset (if (zero? cursor-input-pos) 0 #f)))
+    (define (finish) (values (list->string (reverse acc-rev)) cursor-offset))
+    (match chars
+      ['() (finish)]
+      [(cons c rest)
+       (define (emit str)
+         (define needed (string-length str))
+         (if (>= remaining-width needed)
+             (loop rest
+                   (- remaining-width needed)
+                   (- cursor-input-pos 1)
+                   (append (reverse (string->list str)) acc-rev)
+                   (if (zero? cursor-input-pos)
+                       (length acc-rev)
+                       cursor-offset))
+             (finish)))
+       (match c
+         [#\tab
+          (emit (make-string (- 8 (modulo (length acc-rev) 8)) #\space))]
+         [(? char-iso-control?)
+          (emit (format "[~x]" (char->integer c)))]
+         [_
+          (emit (string c))])])))
+
 (define (render-buffer! t b window-top window-height is-active?)
   (define available-line-count (- window-height 1))
   (define top-of-window-pos (frame-buffer! b available-line-count))
@@ -75,14 +104,15 @@
        [else
         (define eol-pos (buffer-findf b newline? #:position sol-pos))
         (define line (rope->string (buffer-region b #:point eol-pos #:mark sol-pos)))
-        (tty-display t line)
+        (define-values (formatted-line cursor-offset)
+          (format-line line (tty-columns t) (- cursor-pos sol-pos)))
+        (tty-display t formatted-line)
         (tty-clear-to-eol t)
         (tty-newline t)
         (loop (+ line-count 1)
               (+ eol-pos 1)
-              (if (<= sol-pos cursor-pos eol-pos)
-                  (list (+ line-count window-top)
-                        (- cursor-pos sol-pos))
+              (if cursor-offset
+                  (list (+ line-count window-top) cursor-offset)
                   cursor-coordinates))])))
   (tty-statusline-style t is-active?)
   (tty-display t (if is-active? "== " "-- ") (buffer-title b) " ")

@@ -5,7 +5,6 @@
          (struct-out modeset)
          (struct-out incomplete-key-sequence)
          (struct-out unbound-key-sequence)
-         (struct-out key-macro-expansion)
          (struct-out command-invocation)
 
          make-raw-mode
@@ -57,7 +56,6 @@
 
 (struct incomplete-key-sequence (handler) #:prefab)
 (struct unbound-key-sequence () #:prefab)
-(struct key-macro-expansion (keys) #:prefab)
 (struct command-invocation (selector prefix-arg remaining-input) #:prefab)
 
 (define (make-raw-mode name)

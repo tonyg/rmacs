@@ -107,7 +107,8 @@
           (values "ESC" (set-remove modifiers 'control))]
          [(? char? c)
           (define s (format "~v" c))
-          (values (substring s 2 (string-length s)) modifiers)]))
+          (define maybe-downcase (if (set-member? modifiers 'control) string-downcase values))
+          (values (maybe-downcase (substring s 2 (string-length s))) modifiers)]))
      (format-modifiers updated-modifiers str)]))
 
 (define (keyseq->keyspec keyseq)

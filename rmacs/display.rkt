@@ -25,6 +25,7 @@
          color-cyan
          color-white)
 
+(require racket/set)
 (require racket/match)
 (require ansi)
 
@@ -140,7 +141,13 @@
   tty)
 
 (define (tty-next-key tty)
-  (lex-lcd-input (tty-input tty)))
+  (define k (lex-lcd-input (tty-input tty)))
+  (if (equal? k (key #\[ (set 'control))) ;; ESC
+      (or (sync/timeout 0.5
+                        (handle-evt (tty-next-key-evt tty)
+                                    (lambda (k) (add-modifier 'meta k))))
+          k)
+      k))
 
 (define (tty-next-key-evt tty)
   (handle-evt (tty-input tty)
