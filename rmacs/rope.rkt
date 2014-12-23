@@ -86,7 +86,7 @@
 (define (compute-index index default limit)
   (cond [(not index) default]
         [(zero? limit) 0]
-        [else (modulo index limit)]))
+        [else (max 0 (min limit (if (negative? index) (+ index limit) index)))]))
 
 (define (substrand t0 [lo0 #f] [hi0 #f])
   (define t (if (string? t0) (string->strand t0) t0))
@@ -516,4 +516,14 @@
 
   (check-equal? (call-with-values (lambda () (rope-split (empty-rope) 0)) list)
                 (list (empty-rope) (empty-rope)))
+
+  (check-equal? (map rope->string
+                     (call-with-values (lambda () (rope-split (string->rope "abc") 0)) list))
+                (list "" "abc"))
+  (check-equal? (map rope->string
+                     (call-with-values (lambda () (rope-split (string->rope "abc") 2)) list))
+                (list "ab" "c"))
+  (check-equal? (map rope->string
+                     (call-with-values (lambda () (rope-split (string->rope "abc") 3)) list))
+                (list "abc" ""))
   )
