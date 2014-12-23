@@ -1,1 +1,8 @@
 Make it reloadable
+
+Incremental display repair
+
+Windows need their own top-of-window-mtype and point location
+
+Invert editor-->buffer so it's buffer-->editor instead, and make
+commands take a buffer instead of an editor.
