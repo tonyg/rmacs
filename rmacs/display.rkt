@@ -64,7 +64,8 @@
     (tty-reset *stdin-tty*)
     (plumber-add-flush! (current-plumber)
                         (lambda (h)
-                          (tty-style-reset *stdin-tty*)
+                          (tty-display *stdin-tty*
+                                       (select-graphic-rendition style-normal))
                           (tty-goto *stdin-tty* (tty-last-row *stdin-tty*) 0))))
   *stdin-tty*)
 
