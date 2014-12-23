@@ -83,15 +83,15 @@
       text
       (substring text offset (+ offset count))))
 
-(define (compute-index index default limit)
+(define (compute-range-index index default limit)
   (cond [(not index) default]
         [(zero? limit) 0]
         [else (max 0 (min limit (if (negative? index) (+ index limit) index)))]))
 
 (define (substrand t0 [lo0 #f] [hi0 #f])
   (define t (if (string? t0) (string->strand t0) t0))
-  (define lo (compute-index lo0 0 (strand-count t)))
-  (define hi (compute-index hi0 (strand-count t) (strand-count t)))
+  (define lo (compute-range-index lo0 0 (strand-count t)))
+  (define hi (compute-range-index hi0 (strand-count t) (strand-count t)))
   (strand (strand-text t)
           (+ (strand-offset t) lo)
           (- hi lo)))
@@ -396,8 +396,8 @@
     (add-mark-to-table i mtype (+ pos offset) val)))
 
 (define (subrope r0 [lo0 #f] [hi0 #f])
-  (define lo (compute-index lo0 0 (rope-size r0)))
-  (define hi (compute-index hi0 (rope-size r0) (rope-size r0)))
+  (define lo (compute-range-index lo0 0 (rope-size r0)))
+  (define hi (compute-range-index hi0 (rope-size r0) (rope-size r0)))
   (define-values (_l mr) (rope-split r0 lo))
   (define-values (m _r) (rope-split mr (- hi lo)))
   m)
@@ -526,4 +526,8 @@
   (check-equal? (map rope->string
                      (call-with-values (lambda () (rope-split (string->rope "abc") 3)) list))
                 (list "abc" ""))
+
+  (check-equal? (map (lambda (i) (compute-range-index i 'default 10))
+                     (list 0 10 3 -1 -2 11 12 -8 -9 -10 -11 -12))
+                (list      0 10 3  9  8 10 10  2  1   0   0   0))
   )
