@@ -12,6 +12,8 @@
          tty-goto
          tty-style
          tty-style-reset
+         tty-next-key
+         tty-next-key-evt
 
          ;; From ansi
          color-black
@@ -136,3 +138,10 @@
   (set-tty-rows! tty (position-report-row report))
   (set-tty-columns! tty (position-report-column report))
   tty)
+
+(define (tty-next-key tty)
+  (lex-lcd-input (tty-input tty)))
+
+(define (tty-next-key-evt tty)
+  (handle-evt (tty-input tty)
+              (lambda (_) (tty-next-key tty))))

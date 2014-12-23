@@ -27,20 +27,21 @@
 ;; Ensures the given mark is sanely positioned as a top-of-window mark
 ;; with respect to the given cursor position. Returns the
 ;; top-of-window position.
-(define (frame-buffer! buf window-height
+(define (frame-buffer! buf available-line-count
                        #:preferred-position-fraction [preferred-position-fraction 1/2])
   (define old-top-of-window-pos (or (buffer-mark-pos buf top-of-window-mtype) 0))
-  (define preferred-distance-from-bottom (ceiling (* window-height (- 1 preferred-position-fraction))))
+  (define preferred-distance-from-bottom
+    (ceiling (* available-line-count (- 1 preferred-position-fraction))))
   (let loop ((pos (buffer-findf buf newline? #:forward? #f))
              (line-count 0)
              (top-of-window-pos old-top-of-window-pos))
     (define new-top-of-window-pos
       (if (= line-count preferred-distance-from-bottom) pos top-of-window-pos))
     (cond
-     [(<= pos old-top-of-window-pos)
+     [(= pos old-top-of-window-pos)
       old-top-of-window-pos]
-     [(= line-count window-height)
-      (buffer-mark! buf top-of-window-mtype #:position new-top-of-window-pos)
+     [(>= line-count (- available-line-count 1))
+      (buffer-mark! buf new-top-of-window-pos #:mark-type top-of-window-mtype)
       new-top-of-window-pos]
      [else
       (loop (buffer-findf buf newline? #:forward? #f #:position (- pos 1))
@@ -59,7 +60,8 @@
              #:background-color color-white))
 
 (define (render-buffer! t b window-top window-height is-active?)
-  (define top-of-window-pos (frame-buffer! b window-height))
+  (define available-line-count (- window-height 1))
+  (define top-of-window-pos (frame-buffer! b available-line-count))
   (define cursor-pos (buffer-pos b))
   (tty-goto t window-top 0)
   (tty-body-style t is-active?)
@@ -68,7 +70,7 @@
                (sol-pos top-of-window-pos)
                (cursor-coordinates #f))
       (cond
-       [(>= line-count (- window-height 1))
+       [(>= line-count available-line-count)
         cursor-coordinates]
        [else
         (define eol-pos (buffer-findf b newline? #:position sol-pos))
@@ -115,11 +117,10 @@
                (list (list w offset remaining))
                '()))])))
 
-(define (render-windows! ws active-window)
-  (define t (stdin-tty))
+(define (render-windows! t ws active-window)
   (define layout (layout-windows ws (tty-rows t)))
   (tty-body-style t #f)
-  (tty-clear t)
+  (tty-goto t 0 0)
   (define active-cursor-position
     (for/fold [(cursor-position #f)] [(e layout)]
       (match-define (list w window-top window-height) e)

@@ -315,8 +315,7 @@
 
 (define (replace-mark r0 mtype new-pos new-value)
   (define pos (find-mark-pos r0 mtype))
-  (when (not pos) (error 'replace-mark "Mark ~a not found" mtype))
-  (set-mark (clear-mark r0 mtype pos) mtype new-pos new-value))
+  (set-mark (if pos (clear-mark r0 mtype pos) r0) mtype new-pos new-value))
 
 (define (clear-all-marks r)
   (and r
