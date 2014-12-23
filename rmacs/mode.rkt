@@ -222,7 +222,7 @@
   (lambda (stx)
     (syntax-parse stx
       [(_ mode-exp
-          (selector editor
+          (selector buffer
                     (~or (~optional (~seq #:next-method next-method)
                                     #:defaults ([next-method #'nm])
                                     #:name "#:next-method")
@@ -245,7 +245,7 @@
           body ...)
        #`(let ((mode mode-exp))
            (mode-define-command! mode 'selector
-                                 (lambda (editor next-method self-selector prefix-arg keyseq)
+                                 (lambda (buffer next-method self-selector prefix-arg keyseq)
                                    (let ((prefix-arg (match prefix-arg
                                                        ['#:default prefix-default]
                                                        ['#:prefix prefix-prefix]

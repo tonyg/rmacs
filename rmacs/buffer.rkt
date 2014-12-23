@@ -1,6 +1,7 @@
 #lang racket/base
 
 (provide make-buffergroup
+         initialize-buffergroup!
          main-mark-type
          buffer?
          make-buffer
@@ -15,9 +16,11 @@
          buffer-pos
          buffer-title
          buffer-group
+         buffer-editor
          buffer-modeset
          buffer-column
          buffer-apply-modeset!
+         invoke-command
          buffer-add-mode!
          buffer-remove-mode!
          buffer-toggle-mode!
@@ -44,6 +47,7 @@
 (require "search.rkt")
 (require "circular-list.rkt")
 (require "mode.rkt")
+(require "keys.rkt")
 
 (require (only-in racket/string string-join))
 (require (only-in racket/path normalize-path))
@@ -52,6 +56,7 @@
 (define main-mark-type (mark-type "main" 'right))
 
 (struct buffergroup ([members #:mutable] ;; (CircularList Buffer)
+                     [editor #:mutable] ;; (Option Editor), for bidirectional editor/group linkage
                      ) #:prefab)
 
 (struct buffer ([rope #:mutable]
@@ -62,7 +67,13 @@
                 ) #:prefab)
 
 (define (make-buffergroup)
-  (buffergroup circular-empty))
+  (buffergroup circular-empty #f))
+
+(define (initialize-buffergroup! g editor)
+  (when (buffergroup-editor g)
+    (error 'initialize-buffergroup! "Duplicate initialization of buffergroup"))
+  (set-buffergroup-editor! g editor)
+  g)
 
 (define (initial-contents-rope initial-contents)
   (cond
@@ -160,11 +171,25 @@
 
 (define (buffer-size buf) (rope-size (buffer-rope buf)))
 
+(define (buffer-editor b)
+  (define g (buffer-group b))
+  (and g (buffergroup-editor g)))
+
 (define (buffer-column buf)
   (- (buffer-pos buf) (buffer-start-of-line buf)))
 
 (define (buffer-apply-modeset! buf modeset)
   (set-buffer-modeset! buf modeset))
+
+(define (invoke-command selector buf
+                        #:keyseq [keyseq #f]
+                        #:prefix-arg [prefix-arg '#:default])
+  (define cmd (modeset-lookup-command (buffer-modeset buf) selector))
+  (when (not cmd)
+    (error 'invoke-command "Unhandled command ~a (key sequence: ~a)"
+           selector
+           (if keyseq (keyseq->keyspec keyseq) "N/A")))
+  (cmd buf prefix-arg keyseq))
 
 (define (buffer-add-mode! buf mode)
   (set-buffer-modeset! buf (modeset-add-mode (buffer-modeset buf) mode)))

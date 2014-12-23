@@ -6,7 +6,6 @@
          render-editor!
          editor-active-buffer
          editor-active-modeset
-         editor-invoke-command
          editor-mainloop
          editor-request-shutdown!
          )
@@ -40,6 +39,7 @@
                     w
                     #f
                     default-modeset))
+  (initialize-buffergroup! g e)
   (configure-fresh-buffer! e scratch)
   e)
 
@@ -82,16 +82,6 @@
 (define (root-keyseq-handler editor)
   (modeset-keyseq-handler (editor-active-modeset editor)))
 
-(define (editor-invoke-command selector editor
-                               #:keyseq [keyseq #f]
-                               #:prefix-arg [prefix-arg '#:default])
-  (define cmd (modeset-lookup-command (editor-active-modeset editor) selector))
-  (when (not cmd)
-    (error 'editor-invoke-command "Unhandled command ~a (key sequence: ~a)"
-           selector
-           (keyseq->keyspec keyseq)))
-  (cmd editor prefix-arg keyseq))
-
 (define (open-debugger editor exc)
   (local-require (only-in web-server/private/util exn->string))
   (define error-report (exn->string exc))
@@ -121,7 +111,8 @@
           (wait-for-input handler)
           (match (handler editor input)
             [(unbound-key-sequence)
-             (if (editor-invoke-command 'unbound-key-sequence editor #:keyseq total-keyseq)
+             (if (invoke-command 'unbound-key-sequence (editor-active-buffer editor)
+                                 #:keyseq total-keyseq)
                  (loop '() '() (root-keyseq-handler editor))
                  (error 'editor-mainloop "Unbound key sequence: ~a"
                         (keyseq->keyspec total-keyseq)))]
@@ -133,7 +124,9 @@
                  (if (equal? keyseq remaining-input)
                      '()
                      (cons (car keyseq) (remove-tail (cdr keyseq))))))
-             (editor-invoke-command selector editor #:keyseq accepted-input #:prefix-arg prefix-arg)
+             (invoke-command selector (editor-active-buffer editor)
+                             #:keyseq accepted-input
+                             #:prefix-arg prefix-arg)
              (loop '() remaining-input (root-keyseq-handler editor))])))))
 
 (define (editor-request-shutdown! editor)
@@ -141,6 +134,6 @@
 
 ;;---------------------------------------------------------------------------
 
-(define-command kernel-mode (save-buffers-kill-terminal e)
+(define-command kernel-mode (save-buffers-kill-terminal buf)
   #:bind-key "C-x C-c"
-  (editor-request-shutdown! e))
+  (editor-request-shutdown! (buffer-editor buf)))
