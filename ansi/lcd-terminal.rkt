@@ -4,6 +4,7 @@
 (provide (struct-out key)
          (struct-out unknown-escape-sequence)
          (struct-out position-report)
+         add-modifier
          lex-lcd-input)
 
 (require racket/set)
