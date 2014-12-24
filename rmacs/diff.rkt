@@ -5,6 +5,8 @@
 ;; comparison, Bell Telephone Laboratories CSTR #41 (1976)
 ;; http://www.cs.dartmouth.edu/~doug/
 
+(provide diff-indices)
+
 (require racket/set)
 (require racket/match)
 
