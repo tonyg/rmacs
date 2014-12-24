@@ -15,4 +15,6 @@
   (editor-mainloop e))
 
 (module+ main
+  (local-require racket/trace)
+  (current-trace-notify (lambda (s) (log-info "TRACE: ~a" s)))
   (void (main)))

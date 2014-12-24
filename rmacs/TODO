@@ -1,5 +1,19 @@
 Make it reloadable
 
-Incremental display repair
-
 Windows need their own top-of-window-mtype and point location
+
+Preserve column on up/down better. This includes dealing with tab expansion
+
+Bundle up all mutable command context into a single record, to let the
+command handler have everything it needs even in the face of change
+
+Need line wrap of some kind.
+
+unknown-escape-sequence contents are byte strings, and keyseq parsing
+and printing should reflect that.
+
+something to do with framing is broken, causing odd scroll-lock
+behaviour near the end of the demo file.
+
+Catch and handle SIGWINCH.
+See http://man7.org/tlpi/code/online/dist/tty/demo_SIGWINCH.c.html

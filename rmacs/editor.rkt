@@ -8,6 +8,7 @@
          editor-active-modeset
          editor-mainloop
          editor-request-shutdown!
+         editor-force-redisplay!
          )
 
 (require racket/match)
@@ -99,41 +100,62 @@
                            (editor-mainloop editor))])
     (let loop ((total-keyseq '())
                (input '())
-               (handler (root-keyseq-handler editor)))
+               (handler (root-keyseq-handler editor))
+               (next-repaint-deadline 0))
+      (define (request-repaint) (or next-repaint-deadline (+ (current-inexact-milliseconds) 20)))
       (define (wait-for-input next-handler)
-        (render-editor! editor)
         (when (editor-running? editor)
-          (sync (handle-evt (tty-next-key-evt (editor-tty editor))
+          (sync (if next-repaint-deadline
+                    (handle-evt (alarm-evt next-repaint-deadline)
+                                (lambda (_)
+                                  (loop total-keyseq '() next-handler next-repaint-deadline)))
+                    never-evt)
+                (handle-evt (tty-next-key-evt (editor-tty editor))
                             (lambda (new-key)
                               (define new-input (list new-key))
-                              (loop (append total-keyseq new-input) new-input next-handler))))))
-      (if (null? input)
-          (wait-for-input handler)
-          (match (handler editor input)
-            [(unbound-key-sequence)
-             (if (invoke-command 'unbound-key-sequence (editor-active-buffer editor)
-                                 #:keyseq total-keyseq)
-                 (loop '() '() (root-keyseq-handler editor))
-                 (error 'editor-mainloop "Unbound key sequence: ~a"
-                        (keyseq->keyspec total-keyseq)))]
-            [(incomplete-key-sequence next-handler)
-             (wait-for-input next-handler)]
-            [(command-invocation selector prefix-arg remaining-input)
-             (define accepted-input
-               (let remove-tail ((keyseq total-keyseq))
-                 (if (equal? keyseq remaining-input)
-                     '()
-                     (cons (car keyseq) (remove-tail (cdr keyseq))))))
-             (invoke-command selector (editor-active-buffer editor)
-                             #:keyseq accepted-input
-                             #:prefix-arg prefix-arg)
-             (loop '() remaining-input (root-keyseq-handler editor))])))))
+                              (loop (append total-keyseq new-input)
+                                    new-input
+                                    next-handler
+                                    next-repaint-deadline))))))
+      (cond
+       [(and next-repaint-deadline (>= (current-inexact-milliseconds) next-repaint-deadline))
+        (render-editor! editor)
+        (loop total-keyseq input handler #f)]
+       [(null? input)
+        (wait-for-input handler)]
+       [else
+        (match (handler editor input)
+          [(unbound-key-sequence)
+           (if (invoke-command 'unbound-key-sequence (editor-active-buffer editor)
+                               #:keyseq total-keyseq)
+               (loop '() '() (root-keyseq-handler editor) (request-repaint))
+               (error 'editor-mainloop "Unbound key sequence: ~a"
+                      (keyseq->keyspec total-keyseq)))]
+          [(incomplete-key-sequence next-handler)
+           (wait-for-input next-handler)]
+          [(command-invocation selector prefix-arg remaining-input)
+           (define accepted-input
+             (let remove-tail ((keyseq total-keyseq))
+               (if (equal? keyseq remaining-input)
+                   '()
+                   (cons (car keyseq) (remove-tail (cdr keyseq))))))
+           (invoke-command selector (editor-active-buffer editor)
+                           #:keyseq accepted-input
+                           #:prefix-arg prefix-arg)
+           (loop '() remaining-input (root-keyseq-handler editor) (request-repaint))])]))))
 
 (define (editor-request-shutdown! editor)
   (set-editor-running?! editor #f))
+
+(define (editor-force-redisplay! editor)
+  (tty-reset (editor-tty editor)))
 
 ;;---------------------------------------------------------------------------
 
 (define-command kernel-mode (save-buffers-kill-terminal buf)
   #:bind-key "C-x C-c"
   (editor-request-shutdown! (buffer-editor buf)))
+
+(define-command kernel-mode (force-redisplay buf)
+  #:bind-key "C-l"
+  (editor-force-redisplay! (buffer-editor buf)))

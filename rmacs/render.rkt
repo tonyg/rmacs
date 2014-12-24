@@ -49,15 +49,10 @@
             new-top-of-window-pos)])))
 
 (define (tty-body-style t is-active?)
-  (tty-style t
-             #:foreground-color color-white
-             #:background-color color-blue
-             #:bold? #f))
+  (tty-set-pen! t (pen color-white color-blue #f #f)))
 
 (define (tty-statusline-style t is-active?)
-  (tty-style t
-             #:foreground-color color-black
-             #:background-color color-white))
+  (tty-set-pen! t (pen color-black color-white #f #f)))
 
 (define (format-line line window-width cursor-input-pos)
   (let loop ((chars (string->list line))
@@ -117,8 +112,9 @@
                   cursor-coordinates))])))
   (tty-statusline-style t is-active?)
   (tty-display t (if is-active? "== " "-- ") (buffer-title b) " ")
-  (tty-display t (make-string (- (tty-columns t) 4 (string-length (buffer-title b)))
-                              (if is-active? #\= #\-)))
+  (let ((remaining-length (- (tty-columns t) 4 (string-length (buffer-title b)))))
+    (when (positive? remaining-length)
+      (tty-display t (make-string remaining-length (if is-active? #\= #\-)))))
   cursor-coordinates)
 
 (define (layout-windows ws total-height [minimum-height 4])
@@ -160,4 +156,5 @@
       (define window-cursor-position (render-buffer! t b window-top window-height is-active?))
       (if is-active? window-cursor-position cursor-position)))
   (when active-cursor-position
-    (tty-goto t (car active-cursor-position) (cadr active-cursor-position))))
+    (tty-goto t (car active-cursor-position) (cadr active-cursor-position)))
+  (tty-flush t))
