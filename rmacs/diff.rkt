@@ -15,7 +15,7 @@
   (for/fold [(classes (hash))]
             [(i (in-naturals))
              (item xs)]
-    (hash-set classes item (set-add (hash-ref classes item (lambda () (set))) i))))
+    (hash-set classes item (cons i (hash-ref classes item '())))))
 
 (struct candidate (x-index y-index chain) #:prefab)
 
@@ -27,7 +27,7 @@
     (define r 0)
     (define c (hash-ref candidates 0))
     (let/ec break
-      (for ((j (in-set (hash-ref ys-equivalence-classes item (lambda () (set))))))
+      (for ((j (in-list (reverse (hash-ref ys-equivalence-classes item '())))))
         ;; j names an index into ys
         (define s (let loop ((s r))
                     (cond
