@@ -9,6 +9,7 @@
 
 (require racket/set)
 (require racket/match)
+(require (only-in racket/sequence sequence-length))
 
 (define (equivalence-classes xs)
   (for/fold [(classes (hash))]
@@ -55,7 +56,10 @@
          '()))))
 
 (define (diff-indices xs ys)
-  (let loop ((i 0) (j 0) (matches (longest-common-subsequence xs ys)))
+  (let loop ((i -1)
+             (j -1)
+             (matches (append (longest-common-subsequence xs ys)
+                              (list (cons (sequence-length xs) (sequence-length ys))))))
     (match matches
       ['() '()]
       [(cons (cons mi mj) rest)
@@ -87,4 +91,16 @@
   (check-equal? (longest-common-subsequence "abcabba" "cbabac")
                 '((2 . 0) (3 . 2) (4 . 3) (6 . 4)))
   (check-equal? (longest-common-subsequence "cbabac" "abcabba")
-                '((1 . 1) (2 . 3) (3 . 4) (4 . 6))))
+                '((1 . 1) (2 . 3) (3 . 4) (4 . 6)))
+
+  (check-equal? (longest-common-subsequence
+                 (vector (vector 1 1 1) (vector 1 1 1) (vector 1 1 1) (vector 1 1 1))
+                 (vector (vector 1 1 1) (vector 2 2 2) (vector 1 1 1) (vector 4 4 4)))
+                '((0 . 0) (1 . 2)))
+  (check-equal? (diff-indices
+                 (vector (vector 1 1 1) (vector 1 1 1) (vector 1 1 1) (vector 1 1 1))
+                 (vector (vector 1 1 1) (vector 2 2 2) (vector 1 1 1) (vector 4 4 4)))
+                '((1 0 1 1) (2 2 3 1)))
+
+  (check-equal? (longest-common-subsequence '(a b c) '(d e f)) '())
+  (check-equal? (diff-indices '(a b c) '(d e f)) '((0 3 0 3))))
