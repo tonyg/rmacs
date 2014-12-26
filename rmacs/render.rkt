@@ -49,7 +49,7 @@
             new-top-of-window-pos)])))
 
 (define (tty-body-style t is-active?)
-  (tty-set-pen! t (pen color-white color-blue #f #f)))
+  (tty-set-pen! t (pen color-white color-black #f #f)))
 
 (define (tty-statusline-style t is-active?)
   (tty-set-pen! t (pen color-black color-white #f #f)))
