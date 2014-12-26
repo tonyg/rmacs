@@ -146,8 +146,8 @@
     (profile-thunk
      (lambda ()
        (diff-indices (make-vector size 'x)
-                        (let ((v (make-vector size 'x)))
-                          (vector-set! v 0 'a)
-                          (vector-set! v 1 'b)
-                          (vector-set! v 2 'c)
-                          v))))))
+                     (let ((v (make-vector size 'x)))
+                       (vector-set! v 0 'a)
+                       (vector-set! v 1 'b)
+                       (vector-set! v 2 'c)
+                       v))))))
