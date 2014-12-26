@@ -60,7 +60,7 @@
              ) #:prefab)
 
 (define (make-screen rows columns pen)
-  (define contents (for/vector ((row rows)) (make-vector columns (cons pen #\space))))
+  (define contents (for/vector ((row rows)) (make-vector columns (cons pen 'empty))))
   (screen rows columns 0 0 pen contents))
 
 (define (copy-screen s)
@@ -137,33 +137,51 @@
   (set-screen-cursor-column! (tty-displayed-screen tty) 0)
   tty)
 
+(define (color-near-cursor s row-delta column-delta)
+  (define r (max 0 (min (- (screen-rows s) 1) (+ (screen-cursor-row s) row-delta))))
+  (define c (max 0 (min (- (screen-columns s) 1) (+ (screen-cursor-column s) column-delta))))
+  (car (vector-ref (vector-ref (screen-contents s) r) c)))
+
+(define (vector-delete! v base count fill)
+  (vector-copy! v base v (+ base count) (vector-length v))
+  (for ((i (in-range (- (vector-length v) count) (vector-length v)))) (vector-set! v i fill)))
+
+(define (vector-insert! v base count fill)
+  (vector-copy! v (+ base count) v base (- (vector-length v) count))
+  (for ((i (in-range base (+ base count)))) (vector-set! v i fill)))
+
 (define (delete-lines tty n)
   (define s (tty-displayed-screen tty))
+  (set-pen tty *pen-white-on-black*)
   (output tty (ansi:delete-lines n))
-  (define blank-line (make-vector (screen-columns s) (cons 'unknown #\space)))
-  (vector-copy! (screen-contents s)
-                (screen-cursor-row s)
-                (screen-contents s)
-                (+ (screen-cursor-row s) n)
-                (screen-rows s))
-  (for ((i (in-range (- (screen-rows s) n) (screen-rows s))))
-    (vector-set! (screen-contents s) i blank-line))
+  (define blank-line (make-vector (screen-columns s) (cons (screen-pen s) 'empty)))
+  (vector-delete! (screen-contents s) (screen-cursor-row s) n blank-line)
   tty)
 
 (define (insert-lines tty n)
   (define s (tty-displayed-screen tty))
-  (set-pen tty (car (vector-ref (vector-ref (screen-contents s)
-                                            (max 0 (- (screen-cursor-row s) 1)))
-                                (screen-cursor-column s))))
+  (set-pen tty *pen-white-on-black*)
   (output tty (ansi:insert-lines n))
-  (define blank-line (make-vector (screen-columns s) (cons (screen-pen s) #\space)))
-  (vector-copy! (screen-contents s)
-                (+ (screen-cursor-row s) n)
-                (screen-contents s)
-                (screen-cursor-row s)
-                (- (screen-rows s) n))
-  (for ((i (in-range (screen-cursor-row s) (+ (screen-cursor-row s) n))))
-    (vector-set! (screen-contents s) i blank-line))
+  (define blank-line (make-vector (screen-columns s) (cons (screen-pen s) 'empty)))
+  (vector-insert! (screen-contents s) (screen-cursor-row s) n blank-line)
+  tty)
+
+(define (delete-columns tty n)
+  (define s (tty-displayed-screen tty))
+  (set-pen tty *pen-white-on-black*)
+  (output tty (ansi:delete-characters n))
+  (define blank-cell (cons (screen-pen s) 'empty))
+  (define line (vector-ref (screen-contents s) (screen-cursor-row s)))
+  (vector-delete! line (screen-cursor-column s) n blank-cell)
+  tty)
+
+(define (insert-columns tty n)
+  (define s (tty-displayed-screen tty))
+  (set-pen tty (color-near-cursor s 0 -1))
+  (output tty (ansi:insert-characters n))
+  (define blank-cell (cons (screen-pen s) 'empty))
+  (define line (vector-ref (screen-contents s) (screen-cursor-row s)))
+  (vector-insert! line (screen-cursor-column s) n blank-cell)
   tty)
 
 (define (output tty . items)
@@ -184,6 +202,8 @@
 (define (tty-cursor-row t) (screen-cursor-row (tty-pending-screen t)))
 (define (tty-cursor-column t) (screen-cursor-column (tty-pending-screen t)))
 
+(define (non-empty? ch) (not (equal? ch 'empty)))
+
 (define (putc tty ch)
   (define s (tty-pending-screen tty))
   (match ch
@@ -193,7 +213,7 @@
      (tty-goto tty (+ (screen-cursor-row s) 1) (screen-cursor-column s))]
     [#\tab
      (for ((i (- 8 (modulo (screen-cursor-column s) 8)))) (putc tty #\space))]
-    [(? char-iso-control?)
+    [(and (? non-empty?) (? char-iso-control?))
      (puts tty (format "[~x]" (char->integer ch)))]
     [_
      (when (< (screen-cursor-column s) (screen-columns s))
@@ -219,7 +239,10 @@
 
 (define (tty-clear-to-eol tty)
   (define start-column (tty-cursor-column tty))
-  (for ((i (- (tty-columns tty) (tty-cursor-column tty)))) (putc tty #\space))
+  (define pen (screen-pen (tty-pending-screen tty)))
+  (tty-set-pen! tty *pen-white-on-black*)
+  (for ((i (- (tty-columns tty) (tty-cursor-column tty)))) (putc tty 'empty))
+  (tty-set-pen! tty pen)
   (tty-goto tty (tty-cursor-row tty) start-column)
   tty)
 
@@ -250,71 +273,78 @@
 ;;         (list->string
 ;;          (for*/list ((line (screen-contents s))
 ;;                      (cell line)
-;;                      #:when (not (equal? (cdr cell) #\space)))
+;;                      #:when (non-empty? (cdr cell)))
 ;;            (cdr cell)))))
 
 (define (goto-if-needed s row column)
-  (if (and (= (screen-cursor-row s) row)
-           (= (screen-cursor-column s) column))
-      ""
-      (begin0 (ansi:goto (+ row 1) (+ column 1))
-              (set-screen-cursor-row! s row)
-              (set-screen-cursor-column! s column))))
+  (cond
+   [(and (= (screen-cursor-row s) row) (= (screen-cursor-column s) column))
+    ""]
+   [(= (screen-cursor-row s) row)
+    (begin0 (ansi:goto-column (+ column 1))
+      (set-screen-cursor-column! s column))]
+   [else
+    (begin0 (ansi:goto (+ row 1) (+ column 1))
+      (set-screen-cursor-row! s row)
+      (set-screen-cursor-column! s column))]))
 
-(define (advance-cursor! s)
+(define (advance-cursor! tty s)
   (set-screen-cursor-column! s (+ (screen-cursor-column s) 1))
   (when (= (screen-cursor-column s) (screen-columns s))
+    (when (< (screen-cursor-row s) (- (screen-rows s) 1))
+      (output tty (ansi:clear-to-eol) "\r\n"))
     (set-screen-cursor-column! s 0)
     (set-screen-cursor-row! s (+ (screen-cursor-row s) 1))))
 
+;; Answers #t when an edit to a line would produce a visible effect.
+(define (interesting-change? old-line new-line column right-margin)
+  (for/or [(i (in-range column right-margin))]
+    (not (equal? (vector-ref old-line i) (vector-ref new-line i)))))
+
 (define (tty-flush tty)
-  ;; (set-pen tty *pen-white-on-black* #:force #t)
-  ;; (clear tty)
   (define old (tty-displayed-screen tty))
   (define new (tty-pending-screen tty))
-  (define patches (diff-indices (screen-contents old) (screen-contents new)))
-
-  ;; Proceed in two stages:
-  ;;  - delete unwanted lines
-  ;;  - insert and blank lines
-
-  (for/fold [(skew 0)]
-            [(patch patches)]
-    (match-define (list patch-old-line patch-old-count patch-new-line patch-new-count) patch)
-    (define delta-lines (- patch-new-count patch-old-count))
-    (define first-row (+ patch-old-line skew))
-    (if (negative? delta-lines)
-        (begin (output tty (goto-if-needed old first-row (screen-cursor-column old)))
-               (delete-lines tty (- delta-lines))
-               (+ skew delta-lines))
-        skew))
-
-  (for/fold [(skew 0)]
-            [(patch patches)]
-    (match-define (list patch-old-line patch-old-count patch-new-line patch-new-count) patch)
-    (define delta-lines (- patch-new-count patch-old-count))
-    (define first-row (+ patch-old-line skew))
-    (when (positive? delta-lines)
-      (output tty (goto-if-needed old first-row (screen-cursor-column old)))
-      (insert-lines tty delta-lines))
-    (for ((row (in-range first-row (+ patch-old-line skew patch-new-count))))
-      (define old-line (vector-ref (screen-contents old) row))
-      (define new-line (vector-ref (screen-contents new) row))
-      ;; TODO: consider diffing old-line and new-line and applying
-      ;; patches rather than just blitting out the whole line
-      ;; whereever it is different.
-      (for ((column (screen-columns new)))
-        (match-define (cons old-pen old-ch) (vector-ref old-line column))
-        (match-define (cons new-pen new-ch) (vector-ref new-line column))
-        (when (not (and (equal? old-pen new-pen) (equal? old-ch new-ch)))
-          (set-pen tty new-pen)
-          (output tty (goto-if-needed old row column) new-ch)
-          (advance-cursor! old))))
-    (+ skew delta-lines))
-
+  (apply-patch! (diff-indices (screen-contents old) (screen-contents new))
+                (lambda (first-row lines-to-remove)
+                  (output tty (goto-if-needed old first-row (screen-cursor-column old)))
+                  (delete-lines tty lines-to-remove))
+                (lambda (first-row lines-to-insert line-count)
+                  (when (positive? lines-to-insert)
+                    (output tty (goto-if-needed old first-row (screen-cursor-column old)))
+                    (insert-lines tty lines-to-insert))
+                  (for ((row (in-range first-row (+ first-row line-count))))
+                    (define old-line (vector-ref (screen-contents old) row))
+                    (define new-line (vector-ref (screen-contents new) row))
+                    (apply-patch! (diff-indices old-line new-line)
+                                  (lambda (first-col cols-to-remove)
+                                    (when (interesting-change? old-line
+                                                               new-line
+                                                               first-col
+                                                               (screen-columns new))
+                                      (output tty (goto-if-needed old row first-col))
+                                      (delete-columns tty cols-to-remove)))
+                                  (lambda (first-col cols-to-insert cell-count)
+                                    (when (interesting-change? old-line
+                                                               new-line
+                                                               first-col
+                                                               (screen-columns new))
+                                      (output tty (goto-if-needed old row first-col))
+                                      (when (and (positive? cols-to-insert)
+                                                 (interesting-change? old-line
+                                                                      new-line
+                                                                      (+ first-col cols-to-insert)
+                                                                      (screen-columns new)))
+                                        (insert-columns tty cols-to-insert))
+                                      (for ((column (in-range first-col (+ first-col cell-count))))
+                                        (match-define (cons new-pen new-ch)
+                                                      (vector-ref new-line column))
+                                        (when (non-empty? new-ch)
+                                          (set-pen tty new-pen)
+                                          (output tty (goto-if-needed old row column) new-ch)
+                                          (advance-cursor! tty old)))))))))
   (output tty (goto-if-needed old (screen-cursor-row new) (screen-cursor-column new)))
   (flush tty)
-  (set-tty-displayed-screen! tty new)
+  (set-tty-displayed-screen! tty (struct-copy screen new [pen (screen-pen old)]))
   (set-tty-pending-screen! tty (copy-screen new))
   tty)
 
