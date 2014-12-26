@@ -1,9 +1,13 @@
 #lang racket/base
-;; Text diff algorithm following Hunt and McIlroy 1976.
+;; Text diff algorithm after Myers 1986 and Ukkonen 1985, following
+;; Levente Uzonyi's Squeak Smalltalk implementation at
+;; http://squeaksource.com/DiffMerge.html
 ;;
-;; J. W. Hunt and M. D. McIlroy, An algorithm for differential file
-;; comparison, Bell Telephone Laboratories CSTR #41 (1976)
-;; http://www.cs.dartmouth.edu/~doug/
+;; E. W. Myers, “An O(ND) difference algorithm and its variations,”
+;; Algorithmica, vol. 1, no. 1–4, pp. 251–266, Nov. 1986.
+;;
+;; E. Ukkonen, “Algorithms for approximate string matching,” Inf.
+;; Control, vol. 64, no. 1–3, pp. 100–118, Jan. 1985.
 
 (provide diff-indices
          apply-patch!)
@@ -20,47 +24,59 @@
 
 (struct candidate (x-index y-index chain) #:prefab)
 
-(define (longest-common-subsequence xs ys)
-  (define ys-equivalence-classes (equivalence-classes ys))
-  (define candidates (hash 0 (candidate -1 -1 #f)))
-  (for [(i (in-naturals))
-        (item xs)]
-    (define r 0)
-    (define c (hash-ref candidates 0))
+(define (longest-common-subsequence* xs ys)
+  (define xs-length (vector-length xs))
+  (define ys-length (vector-length ys))
+  (define total-length (+ xs-length ys-length))
+  (define storage-length (+ 1 (* 2 total-length)))
+  (define frontier (make-vector storage-length 0))
+  (define candidates (make-vector storage-length (candidate -1 -1 #f)))
+  (define chain
     (let/ec break
-      (for ((j (in-list (reverse (hash-ref ys-equivalence-classes item '())))))
-        ;; j names an index into ys
-        (define s (let loop ((s r))
-                    (cond
-                     [(= s (hash-count candidates)) s]
-                     [(and (< (candidate-y-index (hash-ref candidates s)) j)
-                           (or (= s (- (hash-count candidates) 1))
-                               (> (candidate-y-index (hash-ref candidates (+ s 1))) j))) s]
-                     [else (loop (+ s 1))])))
-        (when (< s (hash-count candidates))
-          (define new-candidate (candidate i j (hash-ref candidates s)))
-          (set! candidates (hash-set candidates r c))
-          (set! r (+ s 1))
-          (set! c new-candidate)
-          (when (= r (hash-count candidates))
-            ;; no point in examining further js
-            (break (void))))))
-    (set! candidates (hash-set candidates r c)))
-  ;; At this point, we know the LCS: it's in the reverse of the
-  ;; linked-list through `candidate-chain` of (hash-ref candidates (-
-  ;; (hash-count candidates) 1)).
+      (for ((d (in-range 0 (+ total-length 1))))
+        (for ((k (in-range (- d) (+ d 1) 2)))
+          (define-values (index x)
+            (if (or (= k (- d))
+                    (and (not (= k d))
+                         (< (vector-ref frontier (+ total-length k -1))
+                            (vector-ref frontier (+ total-length k 1)))))
+                (values (+ total-length k 1) (vector-ref frontier (+ total-length k 1)))
+                (values (+ total-length k -1) (+ (vector-ref frontier (+ total-length k -1)) 1))))
+          (define chain (vector-ref candidates index))
+          (define y (- x k))
+          (let loop ()
+            (when (and (< x xs-length)
+                       (< y ys-length)
+                       (equal? (vector-ref xs x)
+                               (vector-ref ys y)))
+              (set! chain (candidate x y chain))
+              (set! x (+ x 1))
+              (set! y (+ y 1))
+              (loop)))
+          (when (and (>= x xs-length)
+                     (>= y ys-length))
+            (break chain))
+          (vector-set! frontier (+ total-length k) x)
+          (vector-set! candidates (+ total-length k) chain)))))
   (reverse
-   (let loop ((c (hash-ref candidates (- (hash-count candidates) 1))))
+   (let loop ((c chain))
      (if (candidate-chain c)
          (cons (cons (candidate-x-index c) (candidate-y-index c))
                (loop (candidate-chain c)))
          '()))))
 
-(define (diff-indices xs ys)
+(define (sequence->vector xs) (for/vector ((x xs)) x))
+
+(define (longest-common-subsequence xs ys)
+  (longest-common-subsequence* (sequence->vector xs) (sequence->vector ys)))
+
+(define (diff-indices xs0 ys0)
+  (define xs (sequence->vector xs0))
+  (define ys (sequence->vector ys0))
   (let loop ((i -1)
              (j -1)
-             (matches (append (longest-common-subsequence xs ys)
-                              (list (cons (sequence-length xs) (sequence-length ys))))))
+             (matches (append (longest-common-subsequence* xs ys)
+                              (list (cons (vector-length xs) (vector-length ys))))))
     (match matches
       ['() '()]
       [(cons (cons mi mj) rest)
