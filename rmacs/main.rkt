@@ -15,6 +15,14 @@
   (editor-mainloop e))
 
 (module+ main
-  (local-require racket/trace)
+  (require racket/trace)
   (current-trace-notify (lambda (s) (log-info "TRACE: ~a" s)))
-  (void (main)))
+  (void (main))
+  ;; (require profile)
+  ;; (require ansi)
+  ;; (void (profile-thunk (lambda () (begin0 (main)
+  ;;                                   (tty-restore!)
+  ;;                                   (display (select-graphic-rendition style-normal))
+  ;;                                   (display (clear-screen))
+  ;;                                   (flush-output)))))
+  )
