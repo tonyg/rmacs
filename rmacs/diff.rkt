@@ -5,7 +5,8 @@
 ;; comparison, Bell Telephone Laboratories CSTR #41 (1976)
 ;; http://www.cs.dartmouth.edu/~doug/
 
-(provide diff-indices)
+(provide diff-indices
+         apply-patch!)
 
 (require racket/set)
 (require racket/match)
@@ -68,6 +69,25 @@
        (if (or (positive? li) (positive? lj))
            (cons (list (+ i 1) li (+ j 1) lj) (loop mi mj rest))
            (loop mi mj rest))])))
+
+;; patch-indices is a result from a call to diff-indices
+(define (apply-patch! patch-indices ;; DiffIndices
+                      remove-elements! ;; Nat Nat -> Void
+                      insert-elements! ;; Nat Nat Nat -> Void
+                      )
+  (for/fold [(skew 0)] [(patch patch-indices)]
+    (match-define (list old-i old-n new-i new-n) patch)
+    (define delta (- new-n old-n))
+    (if (negative? delta)
+        (begin (remove-elements! (+ old-i skew) (- delta))
+               (+ skew delta))
+        skew))
+  (for/fold [(skew 0)] [(patch patch-indices)]
+    (match-define (list old-i old-n new-i new-n) patch)
+    (define delta (- new-n old-n))
+    (insert-elements! (+ old-i skew) (max 0 delta) new-n)
+    (+ skew delta))
+  (void))
 
 (module+ test
   (require rackunit)
