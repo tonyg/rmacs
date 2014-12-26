@@ -123,4 +123,15 @@
                 '((1 0 1 1) (2 2 3 1)))
 
   (check-equal? (longest-common-subsequence '(a b c) '(d e f)) '())
-  (check-equal? (diff-indices '(a b c) '(d e f)) '((0 3 0 3))))
+  (check-equal? (diff-indices '(a b c) '(d e f)) '((0 3 0 3)))
+
+  (let ((size 400))
+    (local-require profile)
+    (profile-thunk
+     (lambda ()
+       (diff-indices (make-vector size 'x)
+                        (let ((v (make-vector size 'x)))
+                          (vector-set! v 0 'a)
+                          (vector-set! v 1 'b)
+                          (vector-set! v 2 'c)
+                          v))))))
