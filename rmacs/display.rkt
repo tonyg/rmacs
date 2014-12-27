@@ -16,6 +16,7 @@
          tty-reset
          tty-goto
          tty-set-pen!
+         tty-default-pen
          tty-pen
          tty-flush
          tty-next-key
@@ -68,7 +69,7 @@
   (define new-contents (for/vector ((row rows)) (vector-copy (vector-ref contents row))))
   (screen rows columns cursor-row cursor-column pen new-contents))
 
-(define *pen-white-on-black* (pen ansi:color-white ansi:color-black #f #f))
+(define tty-default-pen 'default)
 
 (define *stdin-tty* #f)
 (define (stdin-tty)
@@ -78,8 +79,8 @@
           (tty (current-input-port)
                (current-output-port)
                ansi:lex-lcd-input
-               (make-screen 24 80 *pen-white-on-black*)
-               (make-screen 24 80 *pen-white-on-black*)))
+               (make-screen 24 80 tty-default-pen)
+               (make-screen 24 80 tty-default-pen)))
     (reset *stdin-tty*)
     (plumber-add-flush! (current-plumber)
                         (lambda (h)
@@ -112,22 +113,25 @@
   ;; (set! report (ansi:position-report 5 10))
   (define rows (ansi:position-report-row report))
   (define columns (ansi:position-report-column report))
-  (set-pen tty *pen-white-on-black* #:force #t)
+  (set-pen tty tty-default-pen #:force #t)
   (clear tty)
   (flush tty)
-  (set-tty-displayed-screen! tty (make-screen rows columns *pen-white-on-black*))
-  (set-tty-pending-screen! tty (make-screen rows columns *pen-white-on-black*))
+  (set-tty-displayed-screen! tty (make-screen rows columns tty-default-pen))
+  (set-tty-pending-screen! tty (make-screen rows columns tty-default-pen))
   tty)
 
 (define (set-pen tty p #:force [force #f])
-  (match-define (pen fgcolor bgcolor bold? italic?) p)
   (when (or force (not (equal? p (screen-pen (tty-displayed-screen tty)))))
-    (output tty
-            (apply ansi:select-graphic-rendition
-                   `(,@(if bold? (list ansi:style-bold) (list))
-                     ,@(if italic? (list ansi:style-italic/inverse) (list))
-                     ,(ansi:style-text-color fgcolor)
-                     ,(ansi:style-background-color bgcolor))))
+    (match p
+      [(pen fgcolor bgcolor bold? italic?)
+       (output tty
+               (apply ansi:select-graphic-rendition
+                      `(,@(if bold? (list ansi:style-bold) (list))
+                        ,@(if italic? (list ansi:style-italic/inverse) (list))
+                        ,(ansi:style-text-color fgcolor)
+                        ,(ansi:style-background-color bgcolor))))]
+      ['default
+       (output tty (ansi:select-graphic-rendition ansi:style-normal))])
     (set-screen-pen! (tty-displayed-screen tty) p))
   tty)
 
@@ -152,7 +156,7 @@
 
 (define (delete-lines tty n)
   (define s (tty-displayed-screen tty))
-  (set-pen tty *pen-white-on-black*)
+  (set-pen tty tty-default-pen)
   (output tty (ansi:delete-lines n))
   (define blank-line (make-vector (screen-columns s) (cons (screen-pen s) 'empty)))
   (vector-delete! (screen-contents s) (screen-cursor-row s) n blank-line)
@@ -160,7 +164,7 @@
 
 (define (insert-lines tty n)
   (define s (tty-displayed-screen tty))
-  (set-pen tty *pen-white-on-black*)
+  (set-pen tty tty-default-pen)
   (output tty (ansi:insert-lines n))
   (define blank-line (make-vector (screen-columns s) (cons (screen-pen s) 'empty)))
   (vector-insert! (screen-contents s) (screen-cursor-row s) n blank-line)
@@ -168,7 +172,7 @@
 
 (define (delete-columns tty n)
   (define s (tty-displayed-screen tty))
-  (set-pen tty *pen-white-on-black*)
+  (set-pen tty tty-default-pen)
   (output tty (ansi:delete-characters n))
   (define blank-cell (cons (screen-pen s) 'empty))
   (define line (vector-ref (screen-contents s) (screen-cursor-row s)))
@@ -240,7 +244,7 @@
 (define (tty-clear-to-eol tty)
   (define start-column (tty-cursor-column tty))
   (define pen (screen-pen (tty-pending-screen tty)))
-  (tty-set-pen! tty *pen-white-on-black*)
+  (tty-set-pen! tty tty-default-pen)
   (for ((i (- (tty-columns tty) (tty-cursor-column tty)))) (putc tty 'empty))
   (tty-set-pen! tty pen)
   (tty-goto tty (tty-cursor-row tty) start-column)
