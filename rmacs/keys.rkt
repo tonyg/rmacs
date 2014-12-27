@@ -48,7 +48,7 @@
      (cons '#:default (parse-key-sequence rest))]
     [(pregexp "^ *(([cCsSmM]-)*)\"([^\"]*)\"(.*)" (list lexeme modifiers _ stringspec rest))
      (define mods (parse-modifiers modifiers lexeme))
-     (define seq (unknown-escape-sequence (or (read-string-to-end (format "\"~a\"" stringspec))
+     (define seq (unknown-escape-sequence (or (read-string-to-end (format "#\"~a\"" stringspec))
                                               (bad-key lexeme "Bad raw input sequence"))))
      (cons (key seq mods) (parse-key-sequence rest))]
     [(pregexp "^ *(([cCsSmM]-)*)<([^>]+)>(( +.*)|$)" (list lexeme modifiers _ symname rest _))
@@ -99,8 +99,9 @@
     [(key value modifiers)
      (define-values (str updated-modifiers)
        (match value
-         [(unknown-escape-sequence s)
-          (values (format "~v" s) modifiers)]
+         [(unknown-escape-sequence bs)
+          (define s (format "~v" bs))
+          (values (substring s 1 (string-length s)) modifiers)]
          [(? symbol? s)
           (values (format "<~a>" s) modifiers)]
          [#\[ #:when (set-member? modifiers 'control)
