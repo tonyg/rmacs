@@ -249,10 +249,7 @@
 (define (find-mark r mtype
                    #:forward? [forward? #t]
                    #:position [start-pos (if forward? 0 (rope-size r))])
-  (define maybe-pos+val (find-mark* r forward? mtype start-pos))
-  (if maybe-pos+val
-      (values (car maybe-pos+val) (cdr maybe-pos+val))
-      (values #f #f)))
+  (find-mark* r forward? mtype start-pos))
 
 (define (find-mark-pos r mtype
                        #:forward? [forward? #t]
@@ -433,6 +430,14 @@
 
   (check-equal? (rope-size (empty-rope)) 0)
 
+  (define-syntax-rule (find-mark/values arg ...)
+    (match (find-mark arg ...)
+      [(cons p v) (values p v)]
+      [#f (values #f #f)]))
+
+  (define mtype1 (mark-type "Mark1" 'left))
+  (define mtype2 (mark-type "Mark2" 'right))
+
   (define (test-with-pieces string-pieces)
     (define rope-pieces (map string->rope string-pieces))
     (define text (string-append* string-pieces))
@@ -452,31 +457,28 @@
         (check-equal? (rope->string r) text)
         (loop (- n 1) r)))
 
-    (define mtype1 (mark-type "Mark1" 'left))
-    (define mtype2 (mark-type "Mark2" 'right))
-
     (let*-values (((r) (set-mark (rope-concat rope-pieces) mtype1 9 "original"))
                   ((_) (check-equal? (rope->string r) text))
-                  ((pos val) (find-mark r mtype1))
+                  ((pos val) (find-mark/values r mtype1))
                   ((_) (check-equal? pos 9))
                   ((_) (check-equal? val "original"))
                   ((r) (clear-mark r mtype1 pos))
                   ((_) (check-equal? (find-all-marks/type r mtype1) (hash)))
-                  ((pos val) (find-mark r mtype1))
+                  ((pos val) (find-mark/values r mtype1))
                   ((_) (check-false pos))
                   ((_) (check-false val))
                   ((r) (set-mark r mtype1 9 "second"))
-                  ((pos val) (find-mark r mtype1))
+                  ((pos val) (find-mark/values r mtype1))
                   ((_) (check-equal? pos 9))
                   ((_) (check-equal? val "second"))
                   ((r) (set-mark r mtype1 6 "first"))
                   ((r) (set-mark r mtype2 6 "third"))
                   ((_) (check-equal? (find-all-marks/type r mtype1) (hash 6 "first" 9 "second")))
                   ((_) (check-equal? (find-all-marks/type r mtype2) (hash 6 "third")))
-                  ((pos val) (find-mark r mtype1 #:forward? #f))
+                  ((pos val) (find-mark/values r mtype1 #:forward? #f))
                   ((_) (check-equal? pos 9))
                   ((_) (check-equal? val "second"))
-                  ((pos val) (find-mark r mtype1))
+                  ((pos val) (find-mark/values r mtype1))
                   ((_) (check-equal? pos 6))
                   ((_) (check-equal? val "first"))
                   ((l r) (rope-split r pos))
