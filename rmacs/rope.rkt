@@ -307,7 +307,7 @@
                      [mark-index
                       (let* ((old-marks (rope-mark-index r))
                              (old-mark (hash-ref old-marks mtype (lambda () (hash)))))
-                        (define new-mark (hash-remove old-mark position))
+                        (define new-mark (hash-remove old-mark (- position (rope-lo r))))
                         (if (hash-empty? new-mark)
                             (hash-remove old-marks mtype)
                             (hash-set old-marks mtype new-mark)))]))))
