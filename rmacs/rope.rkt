@@ -213,6 +213,17 @@
          [(< pos hi) (values 'here #t)]
          [else (values 'right (- pos hi))]))))
 
+;; (define (dump-mark-tree r)
+;;   (define (-> r)
+;;     (if r
+;;         (list (set->list (rope-marks* r))
+;;               (hash->list (rope-mark-index r))
+;;               (-> (rope-left r))
+;;               (-> (rope-right r)))
+;;         '()))
+;;   (local-require racket/pretty)
+;;   (pretty-print (-> r) (current-error-port)))
+
 ;; Searches from pos (inclusive) in the direction indicated.
 ;; Pos points to a mark-position, not a character-position.
 (define (find-mark* r forward? mtype start-pos)
