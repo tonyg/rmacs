@@ -145,7 +145,7 @@
    [(<= #x20 b #x7e) (simple-key (integer->char b))]
    [(= b #x7f) (simple-key 'backspace)]))
 
-(define (lex-lcd-input port)
+(define (lex-lcd-input port #:utf-8? [utf-8? (lcd-terminal-utf-8?)])
   (cond
    [(eof-object? (peek-byte port)) eof]
    [(or (regexp-try-match #px"^\e\\[([0-9]+(;[0-9]+)*)?(.)" port)
@@ -168,8 +168,8 @@
    ;; Characters between #\u80 and #\uff are ambiguous because in
    ;; some terminals, the high bit is set to indicate meta, and in
    ;; others, they are plain UTF-8 characters. We let the user
-   ;; distinguish via the lcd-terminal-utf-8? parameter.
-   [(not (lcd-terminal-utf-8?))
+   ;; distinguish via the #:utf-8? keyword argument.
+   [(not utf-8?)
     (define b (read-byte port))
     (if (< b 128)
         (interpret-ascii-code b)

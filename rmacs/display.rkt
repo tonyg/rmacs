@@ -58,6 +58,7 @@
              key-reader ;; InputPort -> Key
              [displayed-screen #:mutable] ;; Screen
              [pending-screen #:mutable] ;; Screen
+             [utf-8-input? #:mutable] ;; Boolean
              ) #:prefab)
 
 (define (make-screen rows columns pen)
@@ -80,7 +81,14 @@
                (current-output-port)
                ansi:lex-lcd-input
                (make-screen 24 80 tty-default-pen)
-               (make-screen 24 80 tty-default-pen)))
+               (make-screen 24 80 tty-default-pen)
+               (match (getenv "RMACS_UTF8_INPUT")
+                 [(or #f "yes" "true" "1") #t]
+                 [(or "no" "false" "0") #f]
+                 [v (error 'RMACS_UTF8_INPUT
+                           "Environment variable RMACS_UTF8_INPUT value ~v invalid: must be in ~v"
+                           v
+                           (list "yes" "true" "1" "no" "false" "0"))])))
     (reset *stdin-tty*)
     (plumber-add-flush! (current-plumber)
                         (lambda (h)
@@ -360,7 +368,7 @@
 ;; Input
 
 (define (tty-next-key tty)
-  (define k (ansi:lex-lcd-input (tty-input tty)))
+  (define k (ansi:lex-lcd-input (tty-input tty) #:utf-8? (tty-utf-8-input? tty)))
   (if (equal? k (ansi:key #\[ (set 'control))) ;; ESC
       (or (sync/timeout 0.5
                         (handle-evt (tty-next-key-evt tty)
