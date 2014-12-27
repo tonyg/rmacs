@@ -12,17 +12,7 @@
 (provide diff-indices
          apply-patch!)
 
-(require racket/set)
 (require racket/match)
-(require (only-in racket/sequence sequence-length))
-
-(define (equivalence-classes xs)
-  (for/fold [(classes (hash))]
-            [(i (in-naturals))
-             (item xs)]
-    (hash-set classes item (cons i (hash-ref classes item '())))))
-
-(struct candidate (x-index y-index chain) #:prefab)
 
 (define (longest-common-subsequence* xs ys)
   (define xs-length (vector-length xs))
@@ -30,40 +20,26 @@
   (define total-length (+ xs-length ys-length))
   (define storage-length (+ 1 (* 2 total-length)))
   (define frontier (make-vector storage-length 0))
-  (define candidates (make-vector storage-length (candidate -1 -1 #f)))
-  (define chain
-    (let/ec break
-      (for ((d (in-range 0 (+ total-length 1))))
-        (for ((k (in-range (- d) (+ d 1) 2)))
-          (define-values (index x)
-            (if (or (= k (- d))
-                    (and (not (= k d))
-                         (< (vector-ref frontier (+ total-length k -1))
-                            (vector-ref frontier (+ total-length k 1)))))
-                (values (+ total-length k 1) (vector-ref frontier (+ total-length k 1)))
-                (values (+ total-length k -1) (+ (vector-ref frontier (+ total-length k -1)) 1))))
-          (define chain (vector-ref candidates index))
-          (define y (- x k))
-          (let loop ()
-            (when (and (< x xs-length)
-                       (< y ys-length)
-                       (equal? (vector-ref xs x)
-                               (vector-ref ys y)))
-              (set! chain (candidate x y chain))
-              (set! x (+ x 1))
-              (set! y (+ y 1))
-              (loop)))
-          (when (and (>= x xs-length)
-                     (>= y ys-length))
-            (break chain))
-          (vector-set! frontier (+ total-length k) x)
-          (vector-set! candidates (+ total-length k) chain)))))
-  (reverse
-   (let loop ((c chain))
-     (if (candidate-chain c)
-         (cons (cons (candidate-x-index c) (candidate-y-index c))
-               (loop (candidate-chain c)))
-         '()))))
+  (define candidates (make-vector storage-length '()))
+  (let/ec return
+    (for ((d (in-range 0 (+ total-length 1))))
+      (for ((k (in-range (- d) (+ d 1) 2)))
+        (define-values (index x)
+          (if (or (= k (- d))
+                  (and (not (= k d))
+                       (< (vector-ref frontier (+ total-length k -1))
+                          (vector-ref frontier (+ total-length k 1)))))
+              (values (+ total-length k 1) (vector-ref frontier (+ total-length k 1)))
+              (values (+ total-length k -1) (+ (vector-ref frontier (+ total-length k -1)) 1))))
+        (let loop ((x x) (y (- x k)) (chain (vector-ref candidates index)))
+          (cond
+           [(and (< x xs-length) (< y ys-length) (equal? (vector-ref xs x) (vector-ref ys y)))
+            (loop (+ x 1) (+ y 1) (cons (cons x y) chain))]
+           [(and (>= x xs-length) (>= y ys-length))
+            (return (reverse chain))]
+           [else
+            (vector-set! frontier (+ total-length k) x)
+            (vector-set! candidates (+ total-length k) chain)]))))))
 
 (define (sequence->vector xs) (for/vector ((x xs)) x))
 
