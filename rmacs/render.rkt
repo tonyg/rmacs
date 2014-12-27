@@ -9,7 +9,7 @@
 (require "display.rkt")
 (require "rope.rkt")
 
-(define top-of-window-mtype (mark-type "top-of-window" 'right))
+(define top-of-window-mtype (mark-type "top-of-window" 'left))
 
 (define (newline? c) (equal? c #\newline))
 (define (not-newline? c) (not (newline? c)))
