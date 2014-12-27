@@ -301,6 +301,38 @@
   (for/or [(i (in-range column right-margin))]
     (not (equal? (vector-ref old-line i) (vector-ref new-line i)))))
 
+(define (repair-span! tty old new-line row first-col cell-count)
+  (for ((column (in-range first-col (+ first-col cell-count))))
+    (match-define (cons new-pen new-ch) (vector-ref new-line column))
+    (when (non-empty? new-ch)
+      (set-pen tty new-pen)
+      (output tty (goto-if-needed old row column) new-ch)
+      (advance-cursor! tty old))))
+
+(define (repair-line! tty old new row)
+  (define columns (screen-columns new))
+  (define old-line (vector-ref (screen-contents old) row))
+  (define new-line (vector-ref (screen-contents new) row))
+  (define patches (diff-indices old-line new-line))
+  (if (<= (length patches) 3)
+      (apply-patch! patches
+                    (lambda (first-col cols-to-remove)
+                      (when (interesting-change? old-line new-line first-col columns)
+                        (output tty (goto-if-needed old row first-col))
+                        (delete-columns tty cols-to-remove)))
+                    (lambda (first-col cols-to-insert cell-count)
+                      (when (interesting-change? old-line new-line first-col columns)
+                        (output tty (goto-if-needed old row first-col))
+                        (when (and (positive? cols-to-insert)
+                                   (interesting-change? old-line
+                                                        new-line
+                                                        (+ first-col cols-to-insert)
+                                                        columns))
+                          (insert-columns tty cols-to-insert))
+                        (repair-span! tty old new-line row first-col cell-count))))
+      (begin (repair-span! tty old new-line row 0 columns)
+             (output tty (ansi:clear-to-eol)))))
+
 (define (tty-flush tty)
   (define old (tty-displayed-screen tty))
   (define new (tty-pending-screen tty))
@@ -313,35 +345,7 @@
                     (output tty (goto-if-needed old first-row (screen-cursor-column old)))
                     (insert-lines tty lines-to-insert))
                   (for ((row (in-range first-row (+ first-row line-count))))
-                    (define old-line (vector-ref (screen-contents old) row))
-                    (define new-line (vector-ref (screen-contents new) row))
-                    (apply-patch! (diff-indices old-line new-line)
-                                  (lambda (first-col cols-to-remove)
-                                    (when (interesting-change? old-line
-                                                               new-line
-                                                               first-col
-                                                               (screen-columns new))
-                                      (output tty (goto-if-needed old row first-col))
-                                      (delete-columns tty cols-to-remove)))
-                                  (lambda (first-col cols-to-insert cell-count)
-                                    (when (interesting-change? old-line
-                                                               new-line
-                                                               first-col
-                                                               (screen-columns new))
-                                      (output tty (goto-if-needed old row first-col))
-                                      (when (and (positive? cols-to-insert)
-                                                 (interesting-change? old-line
-                                                                      new-line
-                                                                      (+ first-col cols-to-insert)
-                                                                      (screen-columns new)))
-                                        (insert-columns tty cols-to-insert))
-                                      (for ((column (in-range first-col (+ first-col cell-count))))
-                                        (match-define (cons new-pen new-ch)
-                                                      (vector-ref new-line column))
-                                        (when (non-empty? new-ch)
-                                          (set-pen tty new-pen)
-                                          (output tty (goto-if-needed old row column) new-ch)
-                                          (advance-cursor! tty old)))))))))
+                    (repair-line! tty old new row))))
   (output tty (goto-if-needed old (screen-cursor-row new) (screen-cursor-column new)))
   (flush tty)
   (set-tty-displayed-screen! tty (struct-copy screen new [pen (screen-pen old)]))
