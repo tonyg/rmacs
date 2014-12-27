@@ -19,9 +19,13 @@
   (require racket/trace)
   (current-trace-notify (lambda (s) (log-info "TRACE: ~a" s)))
   (void
-   (rmacs #:initial-files (list
-                           (build-path (collection-file-path "main.rkt" "rmacs")
-                                       'up 'up "doc" "xterm_controls.txt"))))
+   (rmacs #:initial-files (match (current-command-line-arguments)
+                            ['#()
+                             (list
+                              (build-path (collection-file-path "main.rkt" "rmacs")
+                                          'up 'up "doc" "xterm_controls.txt"))]
+                            [(vector files ...)
+                             files])))
   ;; (require profile)
   ;; (require ansi)
   ;; (void (profile-thunk (lambda () (begin0 (main)
