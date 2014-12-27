@@ -5,6 +5,7 @@
          (struct-out relative-size)
          make-window
          window-split
+         window-command
          )
 
 (require racket/match)
@@ -38,3 +39,8 @@
               (define new-size (if proportional? (cadr e) (scale-size (cadr e))))
               (list (list w new-size)
                     (list (make-window (window-buffer w)) new-size)))))
+
+(define (window-command selector window
+                        #:keyseq [keyseq #f]
+                        #:prefix-arg [prefix-arg '#:default])
+  (command selector (window-buffer window) #:window window #:keyseq keyseq #:prefix-arg prefix-arg))

@@ -4,9 +4,6 @@ Windows need their own top-of-window-mtype and point location
 
 Preserve column on up/down better. This includes dealing with tab expansion
 
-Bundle up all mutable command context into a single record, to let the
-command handler have everything it needs even in the face of change
-
 Need line wrap of some kind.
 
 Catch and handle SIGWINCH.

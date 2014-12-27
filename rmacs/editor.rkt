@@ -4,6 +4,7 @@
          make-editor
          visit-file!
          render-editor!
+         editor-command
          editor-active-buffer
          editor-active-modeset
          editor-mainloop
@@ -80,6 +81,11 @@
   (define b (editor-active-buffer editor))
   (and b (buffer-modeset b)))
 
+(define (editor-command selector editor
+                        #:keyseq [keyseq #f]
+                        #:prefix-arg [prefix-arg '#:default])
+  (window-command selector (editor-active-window editor) #:keyseq keyseq #:prefix-arg prefix-arg))
+
 (define (root-keyseq-handler editor)
   (modeset-keyseq-handler (editor-active-modeset editor)))
 
@@ -126,8 +132,7 @@
        [else
         (match (handler editor input)
           [(unbound-key-sequence)
-           (if (invoke-command 'unbound-key-sequence (editor-active-buffer editor)
-                               #:keyseq total-keyseq)
+           (if (invoke (editor-command 'unbound-key-sequence editor #:keyseq total-keyseq))
                (loop '() '() (root-keyseq-handler editor) (request-repaint))
                (error 'editor-mainloop "Unbound key sequence: ~a"
                       (keyseq->keyspec total-keyseq)))]
@@ -139,9 +144,7 @@
                (if (equal? keyseq remaining-input)
                    '()
                    (cons (car keyseq) (remove-tail (cdr keyseq))))))
-           (invoke-command selector (editor-active-buffer editor)
-                           #:keyseq accepted-input
-                           #:prefix-arg prefix-arg)
+           (invoke (editor-command selector editor #:keyseq accepted-input #:prefix-arg prefix-arg))
            (loop '() remaining-input (root-keyseq-handler editor) (request-repaint))])]))))
 
 (define (editor-request-shutdown! editor)

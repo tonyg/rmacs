@@ -25,16 +25,11 @@
          modeset-lookup-command
 
          kernel-mode
-         kernel-modeset
-
-         define-key
-         define-command)
+         kernel-modeset)
 
 (require racket/set)
 (require racket/match)
 (require (only-in racket/list filter-map))
-(require (for-syntax syntax/parse))
-(require (for-syntax racket/base))
 
 (require "keys.rkt")
 (require "topsort.rkt")
@@ -195,14 +190,11 @@
       [(cons table rest)
        (define handler (hash-ref table selector #f))
        (if handler
-           (lambda (e prefix-arg ks)
-             (handler e
-                      (lambda ([prefix-arg prefix-arg] [ks ks])
+           (lambda (cmd)
+             (handler cmd
+                      (lambda ([cmd cmd])
                         (define next-method (search rest))
-                        (when next-method (next-method e prefix-arg ks)))
-                      selector
-                      prefix-arg
-                      ks))
+                        (when next-method (next-method cmd)))))
            (search rest))])))
 
 (define kernel-mode
@@ -212,45 +204,3 @@
 
 (define kernel-modeset
   (modeset-add-mode (make-modeset) kernel-mode))
-
-;;---------------------------------------------------------------------------
-
-(define-syntax-rule (define-key mode-exp keyspec-exp command-symbol)
-  (mode-keymap-bind! mode-exp keyspec-exp 'command-symbol))
-
-(define-syntax define-command
-  (lambda (stx)
-    (syntax-parse stx
-      [(_ mode-exp
-          (selector buffer
-                    (~or (~optional (~seq #:next-method next-method)
-                                    #:defaults ([next-method #'nm])
-                                    #:name "#:next-method")
-                         (~optional (~seq #:prefix-arg
-                                          (~or (~seq [prefix-arg prefix-default prefix-prefix])
-                                               (~seq [prefix-arg prefix-default])
-                                               prefix-arg))
-                                    #:defaults ([prefix-arg #'pa]
-                                                [prefix-default #''#:default]
-                                                [prefix-prefix #''#:prefix])
-                                    #:name "#:prefix-arg")
-                         (~optional (~seq #:selector self-selector)
-                                    #:defaults ([self-selector #'self])
-                                    #:name "#:self-selector")
-                         (~optional (~seq #:keyseq keyseq)
-                                    #:defaults ([keyseq #'keyseq])
-                                    #:name "#:keyseq"))
-                    ...)
-          (~seq #:bind-key bind-keyspec-exps) ...
-          body ...)
-       #`(let ((mode mode-exp))
-           (mode-define-command! mode 'selector
-                                 (lambda (buffer next-method self-selector prefix-arg keyseq)
-                                   (let ((prefix-arg (match prefix-arg
-                                                       ['#:default prefix-default]
-                                                       ['#:prefix prefix-prefix]
-                                                       [_ prefix-arg])))
-                                     body ...)))
-           #,@(for/list ((bind-keyspec-exp (syntax->list #'(bind-keyspec-exps ...))))
-                #`(mode-keymap-bind! mode #,bind-keyspec-exp 'selector))
-           (void))])))

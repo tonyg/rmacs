@@ -4,12 +4,7 @@
 
 (require racket/set)
 (require racket/match)
-(require ansi/lcd-terminal)
-(require "../mode.rkt")
-(require "../editor.rkt")
-(require "../buffer.rkt")
-(require "../keys.rkt")
-(require "../rope.rkt")
+(require "../api.rkt")
 
 (define fundamental-mode (make-mode "fundamental"))
 
@@ -20,7 +15,7 @@
     [_ #f]))
 
 (define-command fundamental-mode (unbound-key-sequence buf #:keyseq keyseq)
-  (invoke-command 'self-insert-command buf #:keyseq keyseq))
+  (invoke (command 'self-insert-command buf #:keyseq keyseq)))
 
 (define-key fundamental-mode (list "C-q" '#:default) self-insert-command)
 

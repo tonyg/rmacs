@@ -10,7 +10,12 @@
          keymap-update
          keymap-bind
          keymap-unbind
-         keymap-lookup)
+         keymap-lookup
+
+         ;; From ansi/lcd-terminal
+         (struct-out key)
+         (struct-out unknown-escape-sequence)
+         add-modifier)
 
 (require racket/set)
 (require racket/match)
@@ -113,7 +118,7 @@
      (format-modifiers updated-modifiers str)]))
 
 (define (keyseq->keyspec keyseq)
-  (string-join (map key->keyspec keyseq) " "))
+  (and keyseq (string-join (map key->keyspec keyseq) " ")))
 
 ;;---------------------------------------------------------------------------
 ;; Keymaps
