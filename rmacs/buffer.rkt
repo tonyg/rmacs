@@ -15,6 +15,7 @@
          buffer-prev
          buffer-pos
          buffer-title
+         buffer-rope
          buffer-group
          buffer-editor
          buffer-modeset
