@@ -216,7 +216,7 @@
 ;; Searches from pos (inclusive) in the direction indicated.
 ;; Pos points to a mark-position, not a character-position.
 (define (find-mark* r forward? mtype start-pos)
-  (define (search-here r start-pos)
+  (define (search-here r offset start-pos)
     (define marks (hash-ref (rope-mark-index r) mtype #f))
     (define lo (rope-lo r))
     (if (not marks)
@@ -227,22 +227,21 @@
             (if (and (or (not candidate)
                          (pos-comparer pos (car candidate)))
                      (boundary-comparer pos start-pos))
-                (cons (+ pos lo) value)
+                (cons (+ pos offset lo) value)
                 candidate)))))
-  (define (search r start-pos)
+  (define (search r offset start-pos)
     (and r
          (set-member? (rope-marks r) mtype)
          (let-values (((lo hi) (rope-lo+hi r)))
-           (cond
-            [(< start-pos lo)
-             (or (search (rope-left r) start-pos)
-                 (and forward? (search-here r (- start-pos lo))))]
-            [(> start-pos hi)
-             (or (search (rope-right r) (- start-pos hi))
-                 (and (not forward?) (search-here r (- start-pos lo))))]
-            [else
-             (search-here r (- start-pos lo))]))))
-  (search r start-pos))
+           (if forward?
+               (or (and (< start-pos lo) (search (rope-left r) offset start-pos))
+                   (and (<= start-pos hi) (search-here r offset (- start-pos lo)))
+                   (search (rope-right r) (+ offset hi) (- start-pos hi)))
+               (or (and (> start-pos hi) (search (rope-right r) (+ offset hi) (- start-pos hi)))
+                   (and (>= start-pos lo) (search-here r offset (- start-pos lo)))
+                   (search (rope-left r) offset start-pos)))
+           )))
+  (search r 0 start-pos))
 
 (define (has-mark? r mtype)
   (and r (set-member? (rope-marks r) mtype)))
@@ -530,4 +529,12 @@
   (check-equal? (map (lambda (i) (compute-range-index i 'default 10))
                      (list 0 10 3 -1 -2 11 12 -8 -9 -10 -11 -12))
                 (list      0 10 3  9  8 10 10  2  1   0   0   0))
+
+  (let* ((r (rope-append (string->rope (make-string 10 #\a))
+                         (string->rope (make-string (* 2 *glom-up-to*) #\z))))
+         (_ (check-equal? (rope-size r) (+ 10 (* 2 *glom-up-to*))))
+         (r (set-mark r mtype1 (rope-size r) #t))
+         (r (splay-to-pos 'testing r 0))
+         (pos (find-mark-pos r mtype1)))
+    (check-equal? pos 266))
   )
