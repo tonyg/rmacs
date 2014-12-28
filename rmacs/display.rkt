@@ -253,7 +253,7 @@
   (define start-column (tty-cursor-column tty))
   (define pen (screen-pen (tty-pending-screen tty)))
   (tty-set-pen! tty tty-default-pen)
-  (for ((i (- (tty-columns tty) (tty-cursor-column tty)))) (putc tty 'empty))
+  (for ((i (max 0 (- (tty-columns tty) (tty-cursor-column tty))))) (putc tty 'empty))
   (tty-set-pen! tty pen)
   (tty-goto tty (tty-cursor-row tty) start-column)
   tty)
