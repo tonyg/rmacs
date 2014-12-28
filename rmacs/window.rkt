@@ -1,46 +1,55 @@
 #lang racket/base
 
-(provide (except-out (struct-out window) window)
-         (struct-out absolute-size)
-         (struct-out relative-size)
+(provide (except-out (struct-out window) window set-window-buffer!)
+         (rename-out [set-window-buffer!* set-window-buffer!])
          make-window
-         window-split
          window-command
+         window-mark!
+         window-move-to!
          )
 
 (require racket/match)
 
 (require "buffer.rkt")
-(require "lists.rkt")
-
-;; A SizeSpec is either
-;; -- (absolute-size PositiveInteger), a specific size in screen rows
-;; -- (relative-size PositiveReal), a weighted window size
-(struct absolute-size (lines) #:prefab)
-(struct relative-size (weight) #:prefab)
+(require "rope.rkt")
 
 (struct window (id ;; Symbol
-                [buffer #:mutable] ;; Buffer
+                top ;; MarkType
+                point ;; MarkType
+                mark ;; MarkType
+                [buffer #:mutable] ;; (Option Buffer)
                 ) #:prefab)
 
-(define (make-window initial-buffer)
-  (window (gensym 'window)
-          initial-buffer))
+(define (make-window initial-buffer [initial-point-or-mark 0])
+  (define id (gensym 'window))
+  (define w (window id
+                    (mark-type (buffer-mark-type 'top id #f) 'left)
+                    (mark-type (buffer-mark-type 'point id #t) 'right)
+                    (mark-type (buffer-mark-type 'mark id #f) 'left)
+                    #f))
+  (set-window-buffer!* w initial-buffer initial-point-or-mark) ;; sets initial marks
+  w)
 
-(define (scale-size s)
-  (match s
-    [(absolute-size _) s] ;; can't scale fixed-size windows
-    [(relative-size w) (relative-size (/ w 2))]))
-
-(define (window-split w ws #:proportional? [proportional? #f])
-  (replacef ws
-            (lambda (e) (eq? (car e) w))
-            (lambda (e)
-              (define new-size (if proportional? (cadr e) (scale-size (cadr e))))
-              (list (list w new-size)
-                    (list (make-window (window-buffer w)) new-size)))))
+(define (set-window-buffer!* win new [point-or-mark 0])
+  (define old (window-buffer win))
+  (when old
+    (buffer-clear-mark! old (window-top win))
+    (buffer-clear-mark! old (window-point win))
+    (buffer-clear-mark! old (window-mark win)))
+  (set-window-buffer! win new)
+  (when new
+    (buffer-mark! new (window-point win) point-or-mark))
+  (void))
 
 (define (window-command selector window
                         #:keyseq [keyseq #f]
                         #:prefix-arg [prefix-arg '#:default])
   (command selector (window-buffer window) #:window window #:keyseq keyseq #:prefix-arg prefix-arg))
+
+(define (window-mark! win [pos (window-point win)])
+  (buffer-mark! (window-buffer win) (window-mark win) pos)
+  win)
+
+(define (window-move-to! win pos)
+  (buffer-mark! (window-buffer win) (window-point win) pos)
+  win)

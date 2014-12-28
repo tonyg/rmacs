@@ -1,6 +1,6 @@
 Make it reloadable
 
-Windows need their own top-of-window-mtype and point location
+The status line isn't cleared away when you C-x 2.
 
 Preserve column on up/down better. This includes dealing with tab expansion
 

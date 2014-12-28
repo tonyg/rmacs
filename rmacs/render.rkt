@@ -1,6 +1,8 @@
 #lang racket/base
 
-(provide render-windows!)
+(provide (struct-out absolute-size)
+         (struct-out relative-size)
+         render-windows!)
 
 (require racket/match)
 
@@ -9,7 +11,11 @@
 (require "display.rkt")
 (require "rope.rkt")
 
-(define top-of-window-mtype (mark-type "top-of-window" 'left))
+;; A SizeSpec is either
+;; -- (absolute-size PositiveInteger), a specific size in screen rows
+;; -- (relative-size PositiveReal), a weighted window size
+(struct absolute-size (lines) #:prefab)
+(struct relative-size (weight) #:prefab)
 
 (define (newline? c) (equal? c #\newline))
 (define (not-newline? c) (not (newline? c)))
@@ -23,16 +29,16 @@
 ;; will end up at a configurable percentage of the way down the
 ;; window.
 ;;
-;; Buffer Nat -> Nat
-;; Ensures the given mark is sanely positioned as a top-of-window mark
-;; with respect to the given cursor position. Returns the
-;; top-of-window position.
-(define (frame-buffer! buf available-line-count
-                       #:preferred-position-fraction [preferred-position-fraction 1/2])
-  (define old-top-of-window-pos (or (buffer-mark-pos buf top-of-window-mtype) 0))
+;; Window Nat -> Nat
+;; Ensures that window-top is sanely positioned with respect to
+;; window-point. Returns the new position of window-top.
+(define (frame! win available-line-count
+                #:preferred-position-fraction [preferred-position-fraction 1/2])
+  (define buf (window-buffer win))
+  (define old-top-of-window-pos (or (buffer-mark-pos* buf (window-top win)) 0))
   (define preferred-distance-from-bottom
     (ceiling (* available-line-count (- 1 preferred-position-fraction))))
-  (let loop ((pos (buffer-findf buf newline? #:forward? #f))
+  (let loop ((pos (buffer-findf buf (window-point win) newline? #:forward? #f))
              (line-count 0)
              (top-of-window-pos old-top-of-window-pos))
     (define new-top-of-window-pos
@@ -41,10 +47,10 @@
      [(= pos old-top-of-window-pos)
       old-top-of-window-pos]
      [(>= line-count (- available-line-count 1))
-      (buffer-mark! buf new-top-of-window-pos #:mark-type top-of-window-mtype)
+      (buffer-mark! buf (window-top win) new-top-of-window-pos)
       new-top-of-window-pos]
      [else
-      (loop (buffer-findf buf newline? #:forward? #f #:position (- pos 1))
+      (loop (buffer-findf buf (- pos 1) newline? #:forward? #f)
             (+ line-count 1)
             new-top-of-window-pos)])))
 
@@ -84,10 +90,11 @@
          [_
           (emit (string c))])])))
 
-(define (render-buffer! t b window-top window-height is-active?)
+(define (render-window! t win window-top window-height is-active?)
+  (define buf (window-buffer win))
   (define available-line-count (- window-height 1))
-  (define top-of-window-pos (frame-buffer! b available-line-count))
-  (define cursor-pos (buffer-pos b))
+  (define top-of-window-pos (frame! win available-line-count))
+  (define cursor-pos (buffer-mark-pos buf (window-point win)))
   (tty-goto t window-top 0)
   (tty-body-style t is-active?)
   (define cursor-coordinates
@@ -98,8 +105,8 @@
        [(>= line-count available-line-count)
         cursor-coordinates]
        [else
-        (define eol-pos (buffer-findf b newline? #:position sol-pos))
-        (define line (rope->string (buffer-region b #:point eol-pos #:mark sol-pos)))
+        (define eol-pos (buffer-findf buf sol-pos newline?))
+        (define line (rope->string (buffer-region buf sol-pos eol-pos)))
         (define-values (formatted-line cursor-offset)
           (format-line line (tty-columns t) (- cursor-pos sol-pos)))
         (tty-display t formatted-line)
@@ -111,8 +118,8 @@
                   (list (+ line-count window-top) cursor-offset)
                   cursor-coordinates))])))
   (tty-statusline-style t is-active?)
-  (tty-display t (if is-active? "== " "-- ") (buffer-title b) " ")
-  (let ((remaining-length (- (tty-columns t) 4 (string-length (buffer-title b)))))
+  (tty-display t (if is-active? "== " "-- ") (buffer-title buf) " ")
+  (let ((remaining-length (- (tty-columns t) 4 (string-length (buffer-title buf)))))
     (when (positive? remaining-length)
       (tty-display t (make-string remaining-length (if is-active? #\= #\-)))))
   cursor-coordinates)
@@ -152,8 +159,7 @@
     (for/fold [(cursor-position #f)] [(e layout)]
       (match-define (list w window-top window-height) e)
       (define is-active? (eq? w active-window))
-      (define b (window-buffer w))
-      (define window-cursor-position (render-buffer! t b window-top window-height is-active?))
+      (define window-cursor-position (render-window! t w window-top window-height is-active?))
       (if is-active? window-cursor-position cursor-position)))
   (when active-cursor-position
     (tty-goto t (car active-cursor-position) (cadr active-cursor-position)))

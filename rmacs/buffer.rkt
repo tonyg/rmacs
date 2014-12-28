@@ -1,8 +1,8 @@
 #lang racket/base
 
-(provide make-buffergroup
+(provide (struct-out buffer-mark-type)
+         make-buffergroup
          initialize-buffergroup!
-         main-mark-type
          buffer?
          make-buffer
          register-buffer!
@@ -13,7 +13,6 @@
          buffer-reorder!
          buffer-next
          buffer-prev
-         buffer-pos
          buffer-title
          buffer-rope
          buffer-group
@@ -25,21 +24,23 @@
          buffer-remove-mode!
          buffer-toggle-mode!
          buffer-size
-         buffer-move-to!
-         buffer-move-by!
          buffer-start-of-line
          buffer-end-of-line
-         buffer-move-to-start-of-line!
-         buffer-move-to-end-of-line!
+         buffer-mark-types
+         buffer-mark*
+         buffer-mark
+         buffer-mark-pos*
+         buffer-mark-pos
          buffer-mark!
          buffer-clear-mark!
-         buffer-mark-pos
+         buffer-move-mark!
+         buffer-move-mark-to-start-of-line!
+         buffer-move-mark-to-end-of-line!
          buffer-region-split
          buffer-region
          buffer-region-update!
          buffer-insert!
          buffer-replace-contents!
-         call-with-excursion
          buffer-search
          buffer-findf
 
@@ -67,14 +68,16 @@
 (require "mode.rkt")
 (require "keys.rkt")
 
-(define main-mark-type (mark-type "main" 'right))
+(struct buffer-mark-type (kind ;; Symbol
+                          window-id ;; Symbol
+                          preserve? ;; Boolean
+                          ) #:prefab)
 
 (struct buffergroup ([members #:mutable] ;; (CircularList Buffer)
                      [editor #:mutable] ;; (Option Editor), for bidirectional editor/group linkage
                      ) #:prefab)
 
 (struct buffer ([rope #:mutable]
-                [pos #:mutable]
                 [title #:mutable]
                 [group #:mutable] ;; (Option BufferGroup)
                 [modeset #:mutable] ;; ModeSet
@@ -108,7 +111,6 @@
                      title ;; String
                      #:initial-contents [initial-contents ""])
   (register-buffer! group (buffer (initial-contents-rope initial-contents)
-                                  0
                                   title
                                   #f
                                   kernel-modeset)))
@@ -129,7 +131,8 @@
 
 (define (title->buffer* group title)
   (and group
-       (circular-list-memf (lambda (b) (equal? (buffer-title b) title)) (buffergroup-members group))))
+       (circular-list-memf (lambda (b) (equal? (buffer-title b) title))
+                           (buffergroup-members group))))
 
 (define (buffer->buffer* group b)
   (and group
@@ -170,8 +173,7 @@
   (let* ((filename (normalize-path (simplify-path filename)))
          (title (filename->unique-buffer-title group filename))
          (b (make-buffer group title)))
-    (buffer-replace-contents! b (string->rope (file->string filename)))
-    (buffer-move-to! b 0)))
+    (buffer-replace-contents! b (string->rope (file->string filename)))))
 
 (define (buffer-rename! b new-title)
   (if (title-exists-in-group? (buffer-group b) new-title)
@@ -197,8 +199,10 @@
   (define g (buffer-group b))
   (and g (buffergroup-editor g)))
 
-(define (buffer-column buf)
-  (- (buffer-pos buf) (buffer-start-of-line buf)))
+(define (buffer-column buf pos-or-mtype)
+  ;; TODO: count actual columns!
+  (define pos (->pos buf pos-or-mtype 'buffer-column))
+  (- pos (buffer-start-of-line buf pos)))
 
 (define (buffer-apply-modeset! buf modeset)
   (set-buffer-modeset! buf modeset))
@@ -213,106 +217,101 @@
 (define (clamp pos buf)
   (max 0 (min (buffer-size buf) pos)))
 
-(define (buffer-move-to! buf pos0)
-  (define pos (clamp pos0 buf))
-  (set-buffer-pos! buf pos)
-  (buffer-seek! buf pos))
-
 (define (buffer-seek! buf pos)
-  (buffer-lift rope-seek buf pos))
+  (buffer-lift rope-seek buf (clamp pos buf)))
 
-(define (buffer-move-by! buf delta)
-  (buffer-move-to! buf (+ (buffer-pos buf) delta)))
+(define (buffer-start-of-line buf pos-or-mtype)
+  (buffer-findf buf pos-or-mtype (lambda (ch) (equal? ch #\newline)) #:forward? #f))
 
-(define (buffer-start-of-line buf)
-  (buffer-findf buf (lambda (ch) (equal? ch #\newline)) #:forward? #f))
+(define (buffer-end-of-line buf pos-or-mtype)
+  (buffer-findf buf pos-or-mtype (lambda (ch) (equal? ch #\newline)) #:forward? #t))
 
-(define (buffer-end-of-line buf)
-  (buffer-findf buf (lambda (ch) (equal? ch #\newline)) #:forward? #t))
+(define (->pos buf pos-or-mtype what)
+  (clamp (if (number? pos-or-mtype)
+             pos-or-mtype
+             (buffer-mark-pos buf pos-or-mtype what))
+         buf))
 
-(define (buffer-move-to-start-of-line! buf)
-  (buffer-move-to! buf (buffer-start-of-line buf)))
+(define (buffer-mark-types buf)
+  (rope-marks (buffer-rope buf)))
 
-(define (buffer-move-to-end-of-line! buf)
-  (buffer-move-to! buf (buffer-end-of-line buf)))
+(define (buffer-mark* buf mtype)
+  (find-mark (buffer-rope buf) mtype))
 
-(define (buffer-mark! buf [pos (buffer-pos buf)] #:mark-type [mtype main-mark-type] #:value [value #t])
-  (buffer-lift replace-mark buf mtype pos value))
+(define (buffer-mark buf mtype [what 'buffer-mark])
+  (or (buffer-mark* buf mtype)
+      (error what "Mark type ~v not found; available mark types ~v" mtype (buffer-mark-types buf))))
 
-(define (buffer-clear-mark! buf #:mark-type [mtype main-mark-type])
-  (define pos (find-mark-pos (buffer-rope buf) mtype))
+(define (buffer-mark-pos* buf mtype)
+  (find-mark-pos (buffer-rope buf) mtype))
+
+(define (buffer-mark-pos buf mtype [what 'buffer-mark-pos])
+  (or (buffer-mark-pos* buf mtype)
+      (error what "Mark type ~v not found; available mark types ~v" mtype (buffer-mark-types buf))))
+
+(define (buffer-mark! buf mtype pos-or-mtype #:value [value #t])
+  (buffer-lift replace-mark buf mtype (->pos buf pos-or-mtype 'buffer-mark!) value))
+
+(define (buffer-clear-mark! buf mtype)
+  (define pos (buffer-mark-pos* buf mtype))
   (if pos
       (buffer-lift clear-mark buf mtype pos)
       buf))
 
-(define (buffer-mark-pos buf [mtype main-mark-type])
-  (find-mark-pos (buffer-rope buf) mtype))
+(define (buffer-move-mark! buf mtype delta)
+  (match-define (cons pos val) (buffer-mark buf mtype 'buffer-move-mark!))
+  (buffer-mark! buf mtype (+ pos delta) #:value val))
 
-(define (buffer-region-split* buf pos mark)
-  (define lo (clamp (min pos mark) buf))
-  (define hi (clamp (max pos mark) buf))
+(define (buffer-move-mark-to-start-of-line! buf mtype)
+  (define pos (buffer-mark-pos buf mtype 'buffer-move-mark-to-start-of-line!))
+  (buffer-mark! buf mtype (buffer-start-of-line buf pos)))
+
+(define (buffer-move-mark-to-end-of-line! buf mtype)
+  (define pos (buffer-mark-pos buf mtype 'buffer-move-mark-to-end-of-line!))
+  (buffer-mark! buf mtype (buffer-end-of-line buf pos)))
+
+(define (buffer-region-split buf pm1 pm2)
+  (define p1 (->pos buf pm1 'buffer-region-split))
+  (define p2 (->pos buf pm2 'buffer-region-split))
+  (define lo (min p1 p2))
+  (define hi (max p1 p2))
   (define-values (l mr) (rope-split (buffer-rope buf) lo))
   (define-values (m r) (rope-split mr (- hi lo)))
   (values l lo m hi r))
 
-(define (buffer-region-split buf
-                             #:point [pos (buffer-pos buf)]
-                             #:mark [mark (buffer-mark-pos buf)])
-  (buffer-region-split* buf pos mark))
-
-(define (buffer-region buf
-                       #:point [pos (buffer-pos buf)]
-                       #:mark [mark (buffer-mark-pos buf)])
-  (define-values (_l _lo m _hi _r) (buffer-region-split* buf pos mark))
+(define (buffer-region buf pm1 pm2)
+  (define-values (_l _lo m _hi _r) (buffer-region-split buf pm1 pm2))
   m)
 
-(define (buffer-region-update! buf updater
-                               #:point [pos (buffer-pos buf)]
-                               #:mark [mark (buffer-mark-pos buf)])
-  (define-values (l lo old-m hi r) (buffer-region-split* buf pos mark))
-  (define new-m (updater old-m))
+(define (transfer-marks ro rn)
+  (define mtypes-to-transfer
+    (for/list ((mtype (rope-marks ro))
+               #:when (buffer-mark-type-preserve? (mark-type-info mtype)))
+      mtype))
+  (for/fold [(rn rn)] [(mtype mtypes-to-transfer)]
+    (define pos (case (mark-type-stickiness mtype)
+                  [(left) 0]
+                  [(right) (rope-size rn)]))
+    (set-mark rn mtype pos #t)))
+
+(define (buffer-region-update! buf pm1 pm2 updater)
+  (define-values (l lo old-m hi r) (buffer-region-split buf pm1 pm2))
+  (define new-m (transfer-marks old-m (updater old-m)))
   (define delta (- (rope-size new-m) (rope-size old-m)))
   (set-buffer-rope! buf (rope-append (rope-append l new-m) r))
-  (cond
-   [(<= lo (buffer-pos buf) hi) (buffer-move-to! buf (+ hi delta))]
-   [(> (buffer-pos buf) hi) (buffer-move-by! buf delta)]
-   [else buf]))
+  buf)
 
-(define (buffer-insert! buf content-rope
-                        #:point [pos0 (buffer-pos buf)]
-                        #:move? [move? #t])
-  (define pos (clamp pos0 buf))
+(define (buffer-insert! buf pos-or-mtype content-rope)
+  (define pos (->pos buf pos-or-mtype 'buffer-insert!))
   (define-values (l r) (rope-split (buffer-rope buf) pos))
   (set-buffer-rope! buf (rope-append (rope-append l content-rope) r))
-  (when (>= (buffer-pos buf) pos)
-    (set-buffer-pos! buf (+ (buffer-pos buf) (rope-size content-rope))))
   buf)
 
 (define (buffer-replace-contents! buf content-rope)
-  (buffer-region-update! buf (lambda (_dontcare) content-rope) #:point 0 #:mark (buffer-size buf)))
+  (buffer-region-update! buf 0 (buffer-size buf) (lambda (_dontcare) content-rope)))
 
-(define (call-with-excursion buf f)
-  (define excursion (gensym 'excursion))
-  (define saved-mark-type (mark-type (format "Saved mark ~a" excursion) 'right))
-  (define saved-point-type (mark-type (format "Saved point ~a" excursion) 'right))
-  (buffer-mark! buf (buffer-mark-pos buf) #:mark-type saved-mark-type)
-  (buffer-mark! buf (buffer-pos buf) #:mark-type saved-point-type)
-  (define (restore!)
-    (define restore-mark-pos (buffer-mark-pos buf saved-mark-type))
-    (define restore-point-pos (buffer-mark-pos buf saved-point-type))
-    (when restore-mark-pos (buffer-mark! buf restore-mark-pos))
-    (when restore-point-pos (buffer-move-to! buf restore-point-pos))
-    (buffer-clear-mark! buf #:mark-type saved-mark-type)
-    (buffer-clear-mark! buf #:mark-type saved-point-type))
-  (with-handlers [(exn? (lambda (e)
-                          (restore!)
-                          (raise e)))]
-    (define result (f))
-    (restore!)
-    result))
-
-(define (buffer-search* buf start-pos0 forward? move? find-delta)
-  (define start-pos (clamp start-pos0 buf))
+(define (buffer-search* buf start-pos-or-mtype forward? find-delta)
+  (define start-pos (->pos buf start-pos-or-mtype 'buffer-search*))
   (define-values (l r) (rope-split (buffer-rope buf) start-pos))
   (define delta (find-delta (if forward? r l)))
   (and delta
@@ -320,23 +319,15 @@
                                                 [forward? delta]
                                                 [else (- delta (rope-size l))]))
                              buf)))
-         (if move?
-             (buffer-move-to! buf new-pos)
-             (buffer-seek! buf new-pos))
+         (buffer-seek! buf new-pos)
          new-pos)))
 
-(define (buffer-search buf needle
-                       #:position [start-pos (buffer-pos buf)]
-                       #:forward? [forward? #t]
-                       #:move? [move? #f])
-  (buffer-search* buf start-pos forward? move?
+(define (buffer-search buf start-pos-or-mtype needle #:forward? [forward? #t])
+  (buffer-search* buf start-pos-or-mtype forward?
                   (lambda (piece) (search-rope needle piece #:forward? forward?))))
 
-(define (buffer-findf buf f
-                      #:position [start-pos (buffer-pos buf)]
-                      #:forward? [forward? #t]
-                      #:move? [move? #f])
-  (buffer-search* buf start-pos forward? move?
+(define (buffer-findf buf start-pos-or-mtype f #:forward? [forward? #t])
+  (buffer-search* buf start-pos-or-mtype forward?
                   (lambda (piece) (findf-in-rope f piece #:forward? forward?))))
 
 (define (buffer-lift f buf . args)

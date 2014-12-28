@@ -15,9 +15,11 @@
          circular-list-map
          circular-list-filter
          circular-list-remove
-         circular-list-memf)
+         circular-list-memf
+         circular-list-replacef)
 
 (require racket/match)
+(require (only-in racket/list splitf-at))
 
 (struct circular-list ([front #:mutable]
                        [back #:mutable]
@@ -130,6 +132,18 @@
                              (append seen (circular-list-back xs)))
               (loop (cons a seen) (circular-cdr xs)))))))
 
+(define (circular-list-replacef xs finder replacer)
+  (define (rejecter e) (not (finder e)))
+  (define-values (head tail) (splitf-at (circular-list-front xs) rejecter))
+  (if (null? tail)
+      (let-values (((head tail) (splitf-at (reverse (circular-list-back xs)) rejecter)))
+        (if (null? tail)
+            xs
+            (circular-list (circular-list-front xs)
+                           (reverse (append head (replacer (car tail)) (cdr tail))))))
+      (circular-list (append head (replacer (car tail)) (cdr tail))
+                     (circular-list-back xs))))
+
 (module+ test
   (require rackunit)
 
@@ -148,6 +162,27 @@
   (check-abcdef (circular-list '(a b c) '(f e d)))
   (check-abcdef (circular-list '(a b c d e f) '()))
   (check-abcdef (circular-list '() '(f e d c b a)))
+
+  (check-equal? (circular-list->list (circular-list-replacef (circular-list '(a b c) '(f e d))
+                                                             (lambda (x) (eq? x 'e))
+                                                             (lambda (x) (list 111))))
+                '(a b c d 111 f))
+  (check-equal? (circular-list->list (circular-list-replacef (circular-list '(a b c) '(f e d))
+                                                             (lambda (x) (eq? x 'e))
+                                                             (lambda (x) (list 111 222))))
+                '(a b c d 111 222 f))
+  (check-equal? (circular-list->list (circular-list-replacef (circular-list '(a b c) '(f e d))
+                                                             (lambda (x) (eq? x 'b))
+                                                             (lambda (x) (list 111))))
+                '(a 111 c d e f))
+  (check-equal? (circular-list->list (circular-list-replacef (circular-list '(a b c) '(f e d))
+                                                             (lambda (x) (eq? x 'b))
+                                                             (lambda (x) (list 111 222))))
+                '(a 111 222 c d e f))
+  (check-equal? (circular-list->list (circular-list-replacef (circular-list '(a b c) '(f e d))
+                                                             (lambda (x) (eq? x 'x))
+                                                             (lambda (x) (list 111 222))))
+                '(a b c d e f))
 
   (check-equal? (match (circular-cons 1 circular-empty)
                   [(circular-cons a d) (cons a d)])

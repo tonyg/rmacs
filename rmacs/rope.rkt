@@ -48,9 +48,9 @@
 ;; Stickiness adheres. What Finseth calls a "normal mark" has 'right
 ;; stickiness, and what he calls a "fixed mark" has 'left stickiness.
 
-;; A MarkType is a (mark-type String Stickiness). MarkTypes can be
+;; A MarkType is a (mark-type Any Stickiness). MarkTypes can be
 ;; associated with a set of Any values at each position in the rope.
-(struct mark-type (name stickiness) #:prefab)
+(struct mark-type (info stickiness) #:prefab)
 
 ;; A Strand is a (strand String Number Number), representing a
 ;; substring of a string.

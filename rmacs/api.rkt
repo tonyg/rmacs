@@ -6,9 +6,11 @@
 (require "buffer.rkt")
 (require "keys.rkt")
 (require "rope.rkt")
+(require "window.rkt")
 
 (provide (all-from-out "mode.rkt"
                        "editor.rkt"
                        "buffer.rkt"
                        "keys.rkt"
-                       "rope.rkt"))
+                       "rope.rkt"
+                       "window.rkt"))

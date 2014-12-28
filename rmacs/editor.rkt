@@ -2,8 +2,15 @@
 
 (provide (except-out (struct-out editor) editor)
          make-editor
+         open-window
+         close-other-windows
+         close-window
+         resize-window
+         select-window
          visit-file!
          render-editor!
+         editor-next-window
+         editor-prev-window
          editor-command
          editor-active-buffer
          editor-active-modeset
@@ -21,10 +28,11 @@
 (require "mode.rkt")
 (require "keys.rkt")
 (require "rope.rkt")
+(require "circular-list.rkt")
 
 (struct editor (buffers ;; BufferGroup
                 [tty #:mutable] ;; Tty
-                [windows #:mutable] ;; (List (List Window SizeSpec)), abstract window layout
+                [windows #:mutable] ;; (CircularList (List Window SizeSpec)), abstract window layout
                 [active-window #:mutable] ;; (Option Window)
                 [running? #:mutable] ;; Boolean
                 [default-modeset #:mutable] ;; ModeSet
@@ -37,7 +45,7 @@
   (define w (make-window scratch))
   (define e (editor g
                     tty
-                    (list (list w (relative-size 1)))
+                    (list->circular-list (list (list w (relative-size 1))))
                     w
                     #f
                     default-modeset))
@@ -55,13 +63,68 @@
   (or (lookup-buffer g title)
       (configure-fresh-buffer! editor (make-buffer g title #:initial-contents initial-contents))))
 
+(define (split-size s)
+  (match s
+    [(absolute-size _) s] ;; can't scale fixed-size windows
+    [(relative-size w) (relative-size (/ w 2))]))
+
+(define (merge-sizes surviving disappearing)
+  (match* (surviving disappearing)
+    [((relative-size a) (relative-size b)) (relative-size (+ a b))]
+    [(_ _) surviving]))
+
+(define (window-for-buffer editor buffer)
+  (cond [(circular-list-memf (lambda (e) (eq? (window-buffer (car e)) buffer))
+                             (editor-windows editor)) => (compose car circular-car)]
+        [else #f]))
+
+(define (entry-for? window) (lambda (e) (eq? (car e) window)))
+
+(define (window->size-spec editor window)
+  (cond [(circular-list-memf (entry-for? window)
+                             (editor-windows editor)) => (compose cadr circular-car)]
+        [else #f]))
+
+(define (update-window-entry editor win updater)
+  (set-editor-windows! editor (circular-list-replacef (editor-windows editor)
+                                                      (entry-for? win)
+                                                      updater)))
+
 (define (open-window editor buffer
-                     #:size [size (relative-size 1)]
+                     #:after-window [after-window (editor-active-window editor)]
+                     #:proportional? [proportional? #f]
                      #:activate? [activate? #t])
-  (define w (make-window buffer))
-  (set-editor-windows! editor (append (editor-windows editor) (list (list w size))))
-  (when activate? (set-editor-active-window! editor w))
-  w)
+  (define existing-w (window-for-buffer editor buffer))
+  (define existing-size (window->size-spec editor after-window))
+  (define new-size (if proportional? existing-size (split-size existing-size)))
+  (define new-point (or (and existing-w (buffer-mark-pos* buffer (window-point existing-w))) 0))
+  (define new-window (make-window buffer new-point))
+  (update-window-entry editor after-window
+                       (lambda (e) (list (list after-window new-size)
+                                         (list new-window new-size))))
+  (when activate? (set-editor-active-window! editor new-window))
+  new-window)
+
+(define (close-other-windows editor win)
+  (for ((entry (circular-list->list (editor-windows editor))) #:when (not (eq? (car entry) win)))
+    (set-window-buffer! (car entry) #f))
+  (set-editor-windows! editor (list->circular-list (list (list win (relative-size 1)))))
+  (set-editor-active-window! editor win))
+
+(define (close-window editor win)
+  (define prev (editor-prev-window editor win))
+  (define prev-size (window->size-spec editor prev))
+  (define win-size (window->size-spec editor win))
+  (when (and prev (> (circular-length (editor-windows editor)) 1))
+    (when (eq? (editor-active-window editor) win) (set-editor-active-window! editor prev))
+    (update-window-entry editor win (lambda (e) '()))
+    (resize-window editor prev (merge-sizes prev-size win-size))))
+
+(define (resize-window editor win size)
+  (update-window-entry editor win (lambda (e) (list (list win size)))))
+
+(define (select-window editor win)
+  (set-editor-active-window! editor win))
 
 (define (visit-file! editor filename)
   (set-window-buffer! (editor-active-window editor)
@@ -70,7 +133,7 @@
 
 (define (render-editor! editor)
   (render-windows! (editor-tty editor)
-                   (editor-windows editor)
+                   (circular-list->list (editor-windows editor))
                    (editor-active-window editor)))
 
 (define (editor-active-buffer editor)
@@ -80,6 +143,20 @@
 (define (editor-active-modeset editor)
   (define b (editor-active-buffer editor))
   (and b (buffer-modeset b)))
+
+(define (editor-next-window editor win)
+  (cond [(circular-list-memf (entry-for? win)
+                             (editor-windows editor)) => (compose car
+                                                                  circular-car
+                                                                  circular-list-rotate-forward)]
+        [else #f]))
+
+(define (editor-prev-window editor win)
+  (cond [(circular-list-memf (entry-for? win)
+                             (editor-windows editor)) => (compose car
+                                                                  circular-car
+                                                                  circular-list-rotate-backward)]
+        [else #f]))
 
 (define (editor-command selector editor
                         #:keyseq [keyseq #f]
