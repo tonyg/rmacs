@@ -41,8 +41,10 @@
 (define (make-editor #:tty [tty (stdin-tty)]
                      #:default-modeset [default-modeset (make-modeset)])
   (define g (make-buffergroup))
-  (define scratch (make-buffer g "*scratch*" #:initial-contents ";; This is the scratch buffer."))
+  (define scratch (make-buffer g "*scratch*"
+                               #:initial-contents ";; This is the scratch buffer.\n\n"))
   (define w (make-window scratch))
+  (window-move-to! w (buffer-size scratch))
   (define e (editor g
                     tty
                     (list->circular-list (list (list w (relative-size 1))))
