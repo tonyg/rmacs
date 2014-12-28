@@ -166,10 +166,13 @@
 (define (root-keyseq-handler editor)
   (modeset-keyseq-handler (editor-active-modeset editor)))
 
+(define *error-count* 0)
 (define (open-debugger editor exc)
   (local-require (only-in web-server/private/util exn->string))
   (define error-report (exn->string exc))
   (log-error "Exception:\n~a\n" error-report)
+  (set! *error-count* (+ *error-count* 1))
+  (when (>= *error-count* 3) (exit))
   (define b (find-buffer editor "*Error*"))
   (buffer-replace-contents! b (string->rope error-report))
   (open-window editor b))
