@@ -101,25 +101,29 @@
   (define pos (buffer-mark-pos buf (window-point win)))
   (buffer-region-update! buf pos (+ pos 1) (lambda (_deleted) (empty-rope))))
 
+(define (set-window-mark! win [pos (window-point win)])
+  (window-mark! win pos)
+  (message (window-editor win) "Mark set")
+  pos)
+
 (define-command fundamental-mode (beginning-of-buffer buf #:window win #:prefix-arg [tenths 0])
   #:bind-key "M-<"
   #:bind-key "C-<home>"
   #:bind-key "<begin>"
-  (if (eq? tenths '#:prefix) (set! tenths 0) (window-mark! win))
+  (if (eq? tenths '#:prefix) (set! tenths 0) (set-window-mark! win))
   (window-move-to! win (* (buffer-size buf) (max 0 (min 10 tenths)) 1/10)))
 
 (define-command fundamental-mode (end-of-buffer buf #:window win #:prefix-arg [tenths 0])
   #:bind-key "M->"
   #:bind-key "C-<end>"
-  (if (eq? tenths '#:prefix) (set! tenths 0) (window-mark! win))
+  (if (eq? tenths '#:prefix) (set! tenths 0) (set-window-mark! win))
   (window-move-to! win (* (buffer-size buf) (- 10 (max 0 (min 10 tenths))) 1/10)))
 
 (define-command fundamental-mode (exchange-point-and-mark buf #:window win)
   #:bind-key "C-x C-x"
   (define m (buffer-mark-pos* buf (window-mark win)))
   (when m
-    (define p (buffer-mark-pos buf (window-point win)))
-    (window-mark! win p)
+    (window-mark! win)
     (window-move-to! win m)))
 
 (define-command fundamental-mode (set-mark-command buf #:window win #:prefix-arg arg)
@@ -128,7 +132,7 @@
   (if (eq? arg '#:prefix)
       (let ((m (buffer-mark-pos* buf (window-mark win))))
         (and m (window-move-to! win m)))
-      (window-mark! win (window-point win))))
+      (set-window-mark! win)))
 
 (define-command fundamental-mode (split-window-below buf #:window win #:editor ed)
   #:bind-key "C-x 2"

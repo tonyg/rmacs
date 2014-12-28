@@ -79,7 +79,7 @@
 
 (define (render-window! t win window-top window-width window-height is-active?)
   (define buf (window-buffer win))
-  (define available-line-count (- window-height 1))
+  (define available-line-count (if (window-status-line? win) (- window-height 1) window-height))
   (define spans (frame! win available-line-count window-width))
   (define cursor-pos (buffer-mark-pos buf (window-point win)))
   (tty-goto t window-top 0)
@@ -120,42 +120,52 @@
 
   (define cursor-coordinates (render-top-spans spans 0 #f))
 
-  (tty-statusline-style t is-active?)
-  (let* ((prefix (format "-:~a- ~a " (if (buffer-dirty? buf) "**" "--") (buffer-title buf)))
-         (remaining-length (- (tty-columns t) (string-length prefix))))
-    (tty-display t prefix)
-    (when (positive? remaining-length) (tty-display t (make-string remaining-length #\-))))
+  (when (window-status-line? win)
+    (tty-statusline-style t is-active?)
+    (let* ((prefix (format "-:~a- ~a " (if (buffer-dirty? buf) "**" "--") (buffer-title buf)))
+           (remaining-length (- (tty-columns t) (string-length prefix))))
+      (tty-display t prefix)
+      (when (positive? remaining-length) (tty-display t (make-string remaining-length #\-)))))
 
   cursor-coordinates)
 
-(define (layout-windows ws total-width total-height [minimum-height 4])
+(define (layout-windows ws miniwin total-width total-height [minimum-height 4])
+  (define miniwin-spans
+    (frame! miniwin (min 4 total-height) total-width #:preferred-position-fraction 1))
+  (define miniwin-height (length miniwin-spans))
   (define total-weight (foldl + 0 (map (lambda (e)
                                          (match (cadr e)
                                            [(absolute-size _) 0]
                                            [(relative-size w) w])) ws)))
-  (define reserved-lines (foldl + 0 (map (lambda (e)
-                                           (match (cadr e)
-                                             [(absolute-size lines) lines]
-                                             [(relative-size _) 0])) ws)))
+  (define reserved-lines (foldl + miniwin-height (map (lambda (e)
+                                                        (match (cadr e)
+                                                          [(absolute-size lines) lines]
+                                                          [(relative-size _) 0])) ws)))
   (define proportional-lines (- total-height reserved-lines))
-  (let loop ((ws ws) (offset 0) (remaining proportional-lines))
-    (match ws
-      ['() '()]
-      [(cons (list w (and spec (absolute-size lines))) rest)
-       (cons (layout w spec offset 0 total-width lines)
-             (loop rest (+ offset lines) remaining))]
-      [(cons (list w (and spec (relative-size weight))) rest)
-       (define height (max minimum-height
-                           (inexact->exact
-                            (round (* proportional-lines (/ weight total-weight))))))
-       (if (>= remaining height)
-           (if (null? rest)
-               (list (layout w spec offset 0 total-width remaining))
-               (cons (layout w spec offset 0 total-width height)
-                     (loop rest (+ offset height) (- remaining height))))
-           (if (>= remaining minimum-height)
-               (list (layout w spec offset 0 total-width remaining))
-               '()))])))
+  (append (let loop ((ws ws) (offset 0) (remaining proportional-lines))
+            (match ws
+              ['() '()]
+              [(cons (list w (and spec (absolute-size lines))) rest)
+               (cons (layout w spec offset 0 total-width lines)
+                     (loop rest (+ offset lines) remaining))]
+              [(cons (list w (and spec (relative-size weight))) rest)
+               (define height (max minimum-height
+                                   (inexact->exact
+                                    (round (* proportional-lines (/ weight total-weight))))))
+               (if (>= remaining height)
+                   (if (null? rest)
+                       (list (layout w spec offset 0 total-width remaining))
+                       (cons (layout w spec offset 0 total-width height)
+                             (loop rest (+ offset height) (- remaining height))))
+                   (if (>= remaining minimum-height)
+                       (list (layout w spec offset 0 total-width remaining))
+                       '()))]))
+          (list (layout miniwin
+                        (absolute-size miniwin-height)
+                        (- total-height miniwin-height)
+                        0
+                        total-width
+                        miniwin-height))))
 
 (define (render-windows! t layouts active-window)
   (tty-body-style t #f)

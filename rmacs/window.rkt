@@ -3,6 +3,7 @@
 (provide (except-out (struct-out window) window set-window-buffer!)
          (rename-out [set-window-buffer!* set-window-buffer!])
          make-window
+         window-editor
          window-command
          window-mark!
          window-move-to!
@@ -18,6 +19,7 @@
                 point ;; MarkType
                 mark ;; MarkType
                 [buffer #:mutable] ;; (Option Buffer)
+                [status-line? #:mutable] ;; Boolean
                 ) #:prefab)
 
 (define (make-window initial-buffer #:point [initial-point-or-mark 0])
@@ -26,9 +28,14 @@
                     (mark-type (buffer-mark-type 'top id #f) 'left)
                     (mark-type (buffer-mark-type 'point id #t) 'right)
                     (mark-type (buffer-mark-type 'mark id #f) 'left)
-                    #f))
+                    #f
+                    #t))
   (set-window-buffer!* w initial-buffer initial-point-or-mark) ;; sets initial marks
   w)
+
+(define (window-editor w)
+  (and (window-buffer w)
+       (buffer-editor (window-buffer w))))
 
 (define (set-window-buffer!* win new [point-or-mark 0])
   (define old (window-buffer win))

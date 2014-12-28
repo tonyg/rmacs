@@ -10,6 +10,8 @@
          close-window
          resize-window
          select-window
+         windows-for-buffer
+         window-for-buffer
          visit-file!
          render-editor!
          editor-next-window
@@ -21,7 +23,9 @@
          editor-active-modeset
          editor-mainloop
          editor-request-shutdown!
-         editor-force-redisplay!)
+         editor-force-redisplay!
+         clear-message
+         message)
 
 (require racket/match)
 
@@ -43,6 +47,8 @@
                 [default-modeset #:mutable] ;; ModeSet
                 [layout #:mutable] ;; (Option (List Layout))
                 [last-command #:mutable] ;; (Option Command)
+                echo-area ;; Buffer
+                mini-window ;; Window
                 ) #:prefab)
 
 (define (make-editor #:tty [tty (stdin-tty)]
@@ -50,12 +56,15 @@
   (define g (make-buffergroup))
   (define scratch (make-buffer g "*scratch*"
                                #:initial-contents ";; This is the scratch buffer.\n\n"))
+  (define echo-area (make-buffer #f "*echo-area*"))
   (define w (make-window scratch))
   (define ws (list->circular-list (list (list w (relative-size 1)))))
-  (define e (editor g tty ws w #f default-modeset #f #f))
+  (define miniwin (make-window echo-area))
+  (define e (editor g tty ws w #f default-modeset #f #f echo-area miniwin))
   (initialize-buffergroup! g e)
   (configure-fresh-buffer! e scratch)
   (window-move-to! w (buffer-size scratch))
+  (set-window-status-line?! miniwin #f)
   e)
 
 (define (configure-fresh-buffer! editor buffer)
@@ -78,10 +87,13 @@
     [((relative-size a) (relative-size b)) (relative-size (+ a b))]
     [(_ _) surviving]))
 
+(define (windows-for-buffer editor buffer)
+  (map car (filter (lambda (e) (eq? (window-buffer (car e)) buffer))
+                   (circular-list->list (editor-windows editor)))))
+
 (define (window-for-buffer editor buffer)
-  (cond [(circular-list-memf (lambda (e) (eq? (window-buffer (car e)) buffer))
-                             (editor-windows editor)) => (compose car circular-car)]
-        [else #f]))
+  (define ws (windows-for-buffer editor buffer))
+  (and (pair? ws) (car ws)))
 
 (define (entry-for? window) (lambda (e) (eq? (car e) window)))
 
@@ -91,6 +103,7 @@
 (define (layout! editor)
   (when (not (editor-layout editor))
     (set-editor-layout! editor (layout-windows (circular-list->list (editor-windows editor))
+                                               (editor-mini-window editor)
                                                (tty-columns (editor-tty editor))
                                                (tty-rows (editor-tty editor)))))
   (editor-layout editor))
@@ -189,8 +202,10 @@
   (window-command selector (editor-active-window editor) #:keyseq keyseq #:prefix-arg prefix-arg))
 
 (define (invoke/history cmd)
+  (define editor (command-editor cmd))
+  (clear-message editor)
   (define result (invoke cmd))
-  (set-editor-last-command! (command-editor cmd) cmd)
+  (set-editor-last-command! editor cmd)
   result)
 
 (define (editor-last-command? editor . possible-selectors)
@@ -271,6 +286,22 @@
 (define (editor-force-redisplay! editor)
   (tty-reset (editor-tty editor))
   (invalidate-layout! editor))
+
+(define (clear-message editor)
+  (buffer-replace-contents! (editor-echo-area editor) (empty-rope))
+  (invalidate-layout! editor))
+
+(define (message editor fmt . args)
+  (define msg (string->rope (apply format fmt args)))
+  (let* ((msgbuf (find-buffer editor "*Messages*"))
+         (msgwins (filter (lambda (w) (equal? (buffer-mark-pos msgbuf (window-point w))
+                                              (buffer-size msgbuf)))
+                          (windows-for-buffer editor msgbuf))))
+    (buffer-insert! msgbuf (buffer-size msgbuf) (rope-append msg (string->rope "\n")))
+    (for ((w msgwins)) (buffer-mark! msgbuf (window-point w) (buffer-size msgbuf))))
+  (buffer-replace-contents! (editor-echo-area editor) msg)
+  (invalidate-layout! editor)
+  (render-editor! editor))
 
 ;;---------------------------------------------------------------------------
 
