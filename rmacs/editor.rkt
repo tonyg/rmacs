@@ -25,7 +25,9 @@
          editor-request-shutdown!
          editor-force-redisplay!
          clear-message
-         message)
+         message
+         (struct-out exn:abort)
+         abort)
 
 (require racket/match)
 
@@ -38,6 +40,8 @@
 (require "rope.rkt")
 (require "circular-list.rkt")
 (require "file.rkt")
+
+(struct exn:abort exn (detail) #:transparent)
 
 (struct editor (buffers ;; BufferGroup
                 [tty #:mutable] ;; Tty
@@ -204,9 +208,12 @@
 (define (invoke/history cmd)
   (define editor (command-editor cmd))
   (clear-message editor)
-  (define result (invoke cmd))
-  (set-editor-last-command! editor cmd)
-  result)
+  (with-handlers* ([exn:abort? (lambda (e)
+                                 (message editor "~a" (exn-message e))
+                                 (void))])
+    (define result (invoke cmd))
+    (set-editor-last-command! editor cmd)
+    result))
 
 (define (editor-last-command? editor . possible-selectors)
   (and (editor-last-command editor)
@@ -303,6 +310,11 @@
   (invalidate-layout! editor)
   (render-editor! editor))
 
+(define (abort #:detail [detail #f] fmt . args)
+  (raise (exn:abort (apply format fmt args)
+                    (current-continuation-marks)
+                    detail)))
+
 ;;---------------------------------------------------------------------------
 
 (define-command kernel-mode (save-buffers-kill-terminal buf #:editor ed)
@@ -312,6 +324,10 @@
 (define-command kernel-mode (force-redisplay buf #:editor ed)
   #:bind-key "C-l"
   (editor-force-redisplay! ed))
+
+(define-command kernel-mode (keyboard-quit buf)
+  #:bind-key "C-g"
+  (abort "Quit"))
 
 (define-command kernel-mode (dump-buffer-to-stderr buf #:window win)
   #:bind-key "C-M-x"
