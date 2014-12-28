@@ -1,11 +1,5 @@
 Make it reloadable
 
-The status line isn't cleared away when you C-x 0.
- - CLUE: also happens when the window is very narrow and a large jump
-   would clear entire lines, but the lines to be cleared span the
-   entire window. For example, M-> in xterm_controls.txt when the
-   window is ~20 chars wide.
-
 Preserve column on up/down better.
 
 Catch and handle SIGWINCH.

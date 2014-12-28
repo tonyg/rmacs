@@ -315,12 +315,17 @@
     (not (equal? (vector-ref old-line i) (vector-ref new-line i)))))
 
 (define (repair-span! tty old new-line row first-col cell-count)
-  (for ((column (in-range first-col (+ first-col cell-count))))
-    (match-define (cons new-pen new-ch) (vector-ref new-line column))
-    (when (non-empty? new-ch)
-      (set-pen tty new-pen)
-      (output tty (goto-if-needed old row column) new-ch)
-      (advance-cursor! tty old))))
+  (define trailing-empty-count
+    (for/fold [(empty-count 0)] [(column (in-range first-col (+ first-col cell-count)))]
+      (match-define (cons new-pen new-ch) (vector-ref new-line column))
+      (if (non-empty? new-ch)
+          (begin (set-pen tty new-pen)
+                 (output tty (goto-if-needed old row column) new-ch)
+                 (advance-cursor! tty old)
+                 0)
+          (+ empty-count 1))))
+  (when (and (positive? trailing-empty-count) (= (+ first-col cell-count) (tty-columns tty)))
+    (output tty (ansi:clear-to-eol))))
 
 (define (repair-line! tty old new row)
   (define columns (screen-columns new))
@@ -343,8 +348,7 @@
                                                         columns))
                           (insert-columns tty cols-to-insert))
                         (repair-span! tty old new-line row first-col cell-count))))
-      (begin (repair-span! tty old new-line row 0 columns)
-             (output tty (ansi:clear-to-eol)))))
+      (repair-span! tty old new-line row 0 columns)))
 
 (define (tty-flush tty)
   (define old (tty-displayed-screen tty))
