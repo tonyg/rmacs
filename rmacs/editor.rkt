@@ -31,6 +31,7 @@
 (require "keys.rkt")
 (require "rope.rkt")
 (require "circular-list.rkt")
+(require "file.rkt")
 
 (struct editor (buffers ;; BufferGroup
                 [tty #:mutable] ;; Tty
@@ -149,7 +150,8 @@
 (define (visit-file! editor filename)
   (set-window-buffer! (editor-active-window editor)
                       (configure-fresh-buffer! editor
-                                               (file->buffer (editor-buffers editor) filename))))
+                                               (load-buffer (editor-buffers editor)
+                                                            (local-file-buffer-source filename)))))
 
 (define (render-editor! editor)
   (render-windows! (editor-tty editor)

@@ -8,14 +8,19 @@
          register-buffer!
          lookup-buffer
          unused-buffer-title
-         file->buffer
+         load-buffer
+         revert-buffer!
+         save-buffer!
          buffer-rename!
          buffer-reorder!
          buffer-next
          buffer-prev
          buffer-title
+         buffer-dirty?
+         buffer-source
          buffer-rope
          buffer-group
+         mark-buffer-clean!
          buffer-editor
          buffer-modeset
          buffer-string-column-count
@@ -71,6 +76,7 @@
 (require "circular-list.rkt")
 (require "mode.rkt")
 (require "keys.rkt")
+(require "file.rkt")
 
 (struct buffer-mark-type (kind ;; Symbol
                           window-id ;; Symbol
@@ -85,6 +91,8 @@
                 [title #:mutable]
                 [group #:mutable] ;; (Option BufferGroup)
                 [modeset #:mutable] ;; ModeSet
+                [dirty? #:mutable] ;; Boolean
+                [source #:mutable] ;; (Option BufferSource)
                 ) #:prefab)
 
 (struct command (selector ;; Symbol
@@ -117,7 +125,9 @@
   (register-buffer! group (buffer (initial-contents-rope initial-contents)
                                   title
                                   #f
-                                  kernel-modeset)))
+                                  kernel-modeset
+                                  #f
+                                  #f)))
 
 (define (register-buffer! group buf)
   (define old-group (buffer-group buf))
@@ -166,18 +176,21 @@
                   candidate)))
         candidate)))
 
-;; (Option Group) Path -> String
-(define (filename->unique-buffer-title group filename)
-  (define pieces (reverse (map path->string (explode-path filename))))
-  (if (not group)
-      (car pieces)
-      (unused-buffer-title group pieces)))
+(define (load-buffer group src)
+  (define pieces (buffer-source-title-pieces src))
+  (define title (if (not group) (car pieces) (unused-buffer-title group pieces)))
+  (define b (make-buffer group title))
+  (set-buffer-source! b src)
+  (revert-buffer! b)
+  b)
 
-(define (file->buffer group filename)
-  (let* ((filename (normalize-path (simplify-path filename)))
-         (title (filename->unique-buffer-title group filename))
-         (b (make-buffer group title)))
-    (buffer-replace-contents! b (string->rope (file->string filename)))))
+(define (revert-buffer! buf)
+  (buffer-replace-contents! buf (string->rope (buffer-source-read (buffer-source buf))))
+  (mark-buffer-clean! buf))
+
+(define (save-buffer! buf)
+  (buffer-source-write (buffer-source buf) (rope->string (buffer-rope buf)))
+  (mark-buffer-clean! buf))
 
 (define (buffer-rename! b new-title)
   (if (title-exists-in-group? (buffer-group b) new-title)
@@ -198,6 +211,9 @@
         [else #f]))
 
 (define (buffer-size buf) (rope-size (buffer-rope buf)))
+
+(define (mark-buffer-clean! buf)
+  (set-buffer-dirty?! buf #f))
 
 (define (buffer-editor b)
   (define g (buffer-group b))
@@ -324,12 +340,14 @@
   (define new-m (transfer-marks old-m (updater old-m)))
   (define delta (- (rope-size new-m) (rope-size old-m)))
   (set-buffer-rope! buf (rope-append (rope-append l new-m) r))
+  (set-buffer-dirty?! buf #t)
   buf)
 
 (define (buffer-insert! buf pos-or-mtype content-rope)
   (define pos (->pos buf pos-or-mtype 'buffer-insert!))
   (define-values (l r) (rope-split (buffer-rope buf) pos))
   (set-buffer-rope! buf (rope-append (rope-append l content-rope) r))
+  (set-buffer-dirty?! buf #t)
   buf)
 
 (define (buffer-replace-contents! buf content-rope)

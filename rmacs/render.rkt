@@ -121,10 +121,10 @@
   (define cursor-coordinates (render-top-spans spans 0 #f))
 
   (tty-statusline-style t is-active?)
-  (tty-display t "-- " (buffer-title buf) " ")
-  (let ((remaining-length (- (tty-columns t) 4 (string-length (buffer-title buf)))))
-    (when (positive? remaining-length)
-      (tty-display t (make-string remaining-length #\-))))
+  (let* ((prefix (format "-:~a- ~a " (if (buffer-dirty? buf) "**" "--") (buffer-title buf)))
+         (remaining-length (- (tty-columns t) (string-length prefix))))
+    (tty-display t prefix)
+    (when (positive? remaining-length) (tty-display t (make-string remaining-length #\-))))
 
   cursor-coordinates)
 

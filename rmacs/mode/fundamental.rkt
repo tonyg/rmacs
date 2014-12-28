@@ -137,3 +137,7 @@
   #:bind-key "C-tab"
   #:bind-key "C-x o"
   (select-window ed (editor-next-window ed win)))
+
+(define-command fundamental-mode (save-buffer buf)
+  #:bind-key "C-x C-s"
+  (save-buffer! buf))
