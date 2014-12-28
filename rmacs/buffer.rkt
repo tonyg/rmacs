@@ -55,13 +55,9 @@
          buffer-local
          define-buffer-local
 
-         command?
-         command-selector
-         command-buffer
-         command-window
-         command-editor
+         (except-out (struct-out command) command)
+         copy-command
          (rename-out [make-command command])
-         replace-selector
          invoke
 
          define-key
@@ -410,8 +406,20 @@
                   [(command? buffer-or-command) (command-buffer buffer-or-command)]))
   (command selector buffer window (or editor (buffer-editor buffer)) keyseq prefix-arg))
 
-(define (replace-selector cmd selector)
-  (struct-copy command cmd [selector selector]))
+(define (copy-command cmd
+                      #:selector [selector (command-selector cmd)]
+                      #:buffer [buffer (command-buffer cmd)]
+                      #:window [window (command-window cmd)]
+                      #:editor [editor (command-editor cmd)]
+                      #:keyseq [keyseq (command-keyseq cmd)]
+                      #:prefix-arg [prefix-arg (command-prefix-arg cmd)])
+  (struct-copy command cmd
+               [selector selector]
+               [buffer buffer]
+               [window window]
+               [editor editor]
+               [keyseq keyseq]
+               [prefix-arg prefix-arg]))
 
 (define (invoke cmd)
   (match-define (command selector buf _ _ keyseq _) cmd)

@@ -12,12 +12,19 @@
   (match keyseq
     [(list (key (? char? ch) modifiers)) #:when (set-empty? (set-remove modifiers 'shift))
      (buffer-insert! buf (window-point win) (string->rope (string ch)))]
+    [(list (key (? char? ch0) modifiers)) #:when (equal? modifiers (set 'control))
+     (define ch (integer->char (- (char->integer (char-upcase ch0)) (char->integer #\A) -1)))
+     (buffer-insert! buf (window-point win) (string->rope (string ch)))]
     [_ #f]))
 
 (define-command fundamental-mode (unbound-key-sequence buf #:command cmd #:keyseq keyseq)
-  (invoke (replace-selector cmd 'self-insert-command)))
+  (invoke (copy-command cmd #:selector 'self-insert-command)))
 
-(define-key fundamental-mode (list "C-q" '#:default) self-insert-command)
+(define-command fundamental-mode (quoted-insert buf #:command cmd #:keyseq keyseq)
+  #:bind-key "C-q #:default"
+  (invoke (copy-command cmd
+                        #:selector 'self-insert-command
+                        #:keyseq (list (cadr keyseq)))))
 
 (define-command fundamental-mode (newline buf #:window win)
   #:bind-key "C-m"
