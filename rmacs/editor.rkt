@@ -244,3 +244,21 @@
 (define-command kernel-mode (force-redisplay buf)
   #:bind-key "C-l"
   (editor-force-redisplay! (buffer-editor buf)))
+
+(define-command kernel-mode (dump-buffer-to-stderr buf #:window win)
+  #:bind-key "C-M-x"
+  (local-require racket/pretty)
+  (log-info "")
+  (log-info "--------------------------------------------------------------------------------")
+  (log-info "--------------------------------------------------------------------------------")
+  (log-info "========================================================================= WINDOW")
+  (log-info "id ~v" (window-id win))
+  (log-info "top ~v ~v" (window-top win) (buffer-mark-pos* buf (window-top win)))
+  (log-info "point ~v ~v" (window-point win) (buffer-mark-pos* buf (window-point win)))
+  (log-info "mark ~v ~v" (window-mark win) (buffer-mark-pos* buf (window-mark win)))
+  (log-info "title ~v" (buffer-title buf))
+  (log-info "rope:")
+  (pretty-write (buffer-rope buf) (current-error-port))
+  (log-info "modeset:")
+  (pretty-write (buffer-modeset buf) (current-error-port))
+  (log-info "--------------------------------------------------------------------------------"))
