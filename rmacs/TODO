@@ -1,6 +1,4 @@
 Make it reloadable
 
-Preserve column on up/down better.
-
 Catch and handle SIGWINCH.
 See http://man7.org/tlpi/code/online/dist/tty/demo_SIGWINCH.c.html

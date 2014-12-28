@@ -38,11 +38,8 @@
 
 (define (move-to-column win col)
   (define buf (window-buffer win))
-  (buffer-mark! buf (window-point win)
-                (buffer-closest-pos-for-column buf
-                                               (buffer-start-of-line buf (window-point win))
-                                               0
-                                               col)))
+  (define sol (buffer-start-of-line buf (window-point win)))
+  (buffer-mark! buf (window-point win) (buffer-closest-pos-for-column buf sol 0 col)))
 
 (define-command fundamental-mode (forward-char buf #:window win #:prefix-arg [count 1])
   #:bind-key "C-f"
@@ -54,17 +51,29 @@
   #:bind-key "<left>"
   (buffer-move-mark! buf (window-point win) (- count)))
 
+(define-buffer-local last-vertical-movement-preferred-column)
+
+(define (vertical-movement-preferred-column win)
+  (define buf (window-buffer win))
+  (last-vertical-movement-preferred-column
+   buf
+   (or (and (editor-last-command? (buffer-editor buf)
+                                  'next-line
+                                  'prev-line)
+            (last-vertical-movement-preferred-column buf))
+       (buffer-column buf (window-point win)))))
+
 (define-command fundamental-mode (next-line buf #:window win #:prefix-arg [count 1])
   #:bind-key "C-n"
   #:bind-key "<down>"
-  (define col (buffer-column buf (window-point win)))
+  (define col (vertical-movement-preferred-column win))
   (move-forward-n-lines win count)
   (move-to-column win col))
 
 (define-command fundamental-mode (prev-line buf #:window win #:prefix-arg [count 1])
   #:bind-key "C-p"
   #:bind-key "<up>"
-  (define col (buffer-column buf (window-point win)))
+  (define col (vertical-movement-preferred-column win))
   (move-backward-n-lines win count)
   (move-to-column win col))
 

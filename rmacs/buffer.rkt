@@ -20,6 +20,7 @@
          buffer-source
          buffer-rope
          buffer-group
+         buffer-locals
          mark-buffer-clean!
          buffer-editor
          buffer-modeset
@@ -51,6 +52,8 @@
          buffer-replace-contents!
          buffer-search
          buffer-findf
+         buffer-local
+         define-buffer-local
 
          command?
          command-selector
@@ -93,6 +96,7 @@
                 [modeset #:mutable] ;; ModeSet
                 [dirty? #:mutable] ;; Boolean
                 [source #:mutable] ;; (Option BufferSource)
+                [locals #:mutable] ;; (HashEqTable Symbol Any)
                 ) #:prefab)
 
 (struct command (selector ;; Symbol
@@ -127,7 +131,8 @@
                                   #f
                                   kernel-modeset
                                   #f
-                                  #f)))
+                                  #f
+                                  (hasheq))))
 
 (define (register-buffer! group buf)
   (define old-group (buffer-group buf))
@@ -242,7 +247,7 @@
         [(? char?) (loop (+ column-count 1) (+ pos 1))]
         [_ pos])]
      [(= column-count column) pos]
-     [(< column-count column) (- pos 1)])))
+     [(> column-count column) (- pos 1)])))
 
 (define (buffer-apply-modeset! buf modeset)
   (set-buffer-modeset! buf modeset))
@@ -372,6 +377,21 @@
 (define (buffer-findf buf start-pos-or-mtype f #:forward? [forward? #t])
   (buffer-search* buf start-pos-or-mtype forward?
                   (lambda (piece) (findf-in-rope f piece #:forward? forward?))))
+
+(define (buffer-local name [default #f])
+  (case-lambda
+    [(buf)
+     (hash-ref (buffer-locals buf) name default)]
+    [(buf val)
+     (set-buffer-locals! buf (if (equal? val default)
+                                 (hash-remove (buffer-locals buf) name)
+                                 (hash-set (buffer-locals buf) name val)))
+     val]))
+
+(define-syntax define-buffer-local
+  (syntax-rules ()
+    ((_ name) (define name (buffer-local 'name)))
+    ((_ name default) (define name (buffer-local 'name default)))))
 
 (define (buffer-lift f buf . args)
   (define new-rope (apply f (buffer-rope buf) args))

@@ -15,6 +15,8 @@
          editor-next-window
          editor-prev-window
          editor-command
+         invoke/history
+         editor-last-command?
          editor-active-buffer
          editor-active-modeset
          editor-mainloop
@@ -40,6 +42,7 @@
                 [running? #:mutable] ;; Boolean
                 [default-modeset #:mutable] ;; ModeSet
                 [layout #:mutable] ;; (Option (List Layout))
+                [last-command #:mutable] ;; (Option Command)
                 ) #:prefab)
 
 (define (make-editor #:tty [tty (stdin-tty)]
@@ -49,7 +52,7 @@
                                #:initial-contents ";; This is the scratch buffer.\n\n"))
   (define w (make-window scratch))
   (define ws (list->circular-list (list (list w (relative-size 1)))))
-  (define e (editor g tty ws w #f default-modeset #f))
+  (define e (editor g tty ws w #f default-modeset #f #f))
   (initialize-buffergroup! g e)
   (configure-fresh-buffer! e scratch)
   (window-move-to! w (buffer-size scratch))
@@ -185,6 +188,16 @@
                         #:prefix-arg [prefix-arg '#:default])
   (window-command selector (editor-active-window editor) #:keyseq keyseq #:prefix-arg prefix-arg))
 
+(define (invoke/history cmd)
+  (define result (invoke cmd))
+  (set-editor-last-command! (command-editor cmd) cmd)
+  result)
+
+(define (editor-last-command? editor . possible-selectors)
+  (and (editor-last-command editor)
+       (for/or ((selector (in-list possible-selectors)))
+         (eq? (command-selector (editor-last-command editor)) selector))))
+
 (define (root-keyseq-handler editor)
   (modeset-keyseq-handler (editor-active-modeset editor)))
 
@@ -234,7 +247,8 @@
        [else
         (match (handler editor input)
           [(unbound-key-sequence)
-           (if (invoke (editor-command 'unbound-key-sequence editor #:keyseq total-keyseq))
+           (if (invoke/history (editor-command 'unbound-key-sequence editor
+                                               #:keyseq total-keyseq))
                (loop '() '() (root-keyseq-handler editor) (request-repaint))
                (error 'editor-mainloop "Unbound key sequence: ~a"
                       (keyseq->keyspec total-keyseq)))]
@@ -246,7 +260,9 @@
                (if (equal? keyseq remaining-input)
                    '()
                    (cons (car keyseq) (remove-tail (cdr keyseq))))))
-           (invoke (editor-command selector editor #:keyseq accepted-input #:prefix-arg prefix-arg))
+           (invoke/history (editor-command selector editor
+                                           #:keyseq accepted-input
+                                           #:prefix-arg prefix-arg))
            (loop '() remaining-input (root-keyseq-handler editor) (request-repaint))])]))))
 
 (define (editor-request-shutdown! editor)
