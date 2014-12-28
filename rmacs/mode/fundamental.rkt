@@ -38,9 +38,11 @@
 
 (define (move-to-column win col)
   (define buf (window-buffer win))
-  (define eol-pos (buffer-end-of-line buf (window-point win)))
-  (define sol-pos (buffer-start-of-line buf (window-point win)))
-  (buffer-mark! buf (window-point win) (+ sol-pos (min col (- eol-pos sol-pos)))))
+  (buffer-mark! buf (window-point win)
+                (buffer-closest-pos-for-column buf
+                                               (buffer-start-of-line buf (window-point win))
+                                               0
+                                               col)))
 
 (define-command fundamental-mode (forward-char buf #:window win #:prefix-arg [count 1])
   #:bind-key "C-f"

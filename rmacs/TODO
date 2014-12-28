@@ -2,7 +2,7 @@ Make it reloadable
 
 The status line isn't cleared away when you C-x 0.
 
-Preserve column on up/down better. This includes dealing with tab expansion
+Preserve column on up/down better.
 
 Need line wrap of some kind.
 

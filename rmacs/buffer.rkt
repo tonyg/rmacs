@@ -18,7 +18,9 @@
          buffer-group
          buffer-editor
          buffer-modeset
+         buffer-string-column-count
          buffer-column
+         buffer-closest-pos-for-column
          buffer-apply-modeset!
          buffer-add-mode!
          buffer-remove-mode!
@@ -200,10 +202,30 @@
   (define g (buffer-group b))
   (and g (buffergroup-editor g)))
 
+(define (buffer-string-column-count buf start-column str)
+  (for/fold [(count 0)] [(ch str)]
+    (match ch
+      [#\tab (+ count (- 8 (modulo (+ start-column count) 8)))]
+      [#\newline (- start-column)]
+      [_ (+ count 1)])))
+
 (define (buffer-column buf pos-or-mtype)
-  ;; TODO: count actual columns!
   (define pos (->pos buf pos-or-mtype 'buffer-column))
-  (- pos (buffer-start-of-line buf pos)))
+  (define str (rope->string (buffer-region buf (buffer-start-of-line buf pos) pos)))
+  (buffer-string-column-count buf 0 str))
+
+(define (buffer-closest-pos-for-column buf sol-pos column-offset column)
+  (define g (rope-generator (subrope (buffer-rope buf) sol-pos)))
+  (let loop ((column-count column-offset) (pos sol-pos))
+    (cond
+     [(< column-count column)
+      (match (g)
+        [#\tab (loop (+ column-count (- 8 (modulo column-count 8))) (+ pos 1))]
+        [#\newline pos]
+        [(? char?) (loop (+ column-count 1) (+ pos 1))]
+        [_ pos])]
+     [(= column-count column) pos]
+     [(< column-count column) (- pos 1)])))
 
 (define (buffer-apply-modeset! buf modeset)
   (set-buffer-modeset! buf modeset))
@@ -221,11 +243,9 @@
 (define (buffer-seek! buf pos)
   (buffer-lift rope-seek buf (clamp pos buf)))
 
-(define (buffer-start-of-line buf pos-or-mtype)
-  (buffer-findf buf pos-or-mtype (lambda (ch) (equal? ch #\newline)) #:forward? #f))
-
-(define (buffer-end-of-line buf pos-or-mtype)
-  (buffer-findf buf pos-or-mtype (lambda (ch) (equal? ch #\newline)) #:forward? #t))
+(define (newline? ch) (equal? ch #\newline))
+(define (buffer-start-of-line buf pm) (buffer-findf buf pm newline? #:forward? #f))
+(define (buffer-end-of-line buf pm)   (buffer-findf buf pm newline? #:forward? #t))
 
 (define (->pos buf pos-or-mtype what)
   (clamp (if (number? pos-or-mtype)
