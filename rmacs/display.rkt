@@ -242,6 +242,7 @@
   (for ((s strings)) (puts tty s)))
 
 (define (tty-newline tty)
+  (tty-clear-to-eol tty)
   (putc tty #\return)
   (putc tty #\newline))
 
@@ -304,7 +305,7 @@
   (set-screen-cursor-column! s (+ (screen-cursor-column s) 1))
   (when (= (screen-cursor-column s) (screen-columns s))
     (when (< (screen-cursor-row s) (- (screen-rows s) 1))
-      (output tty (ansi:clear-to-eol) "\r\n"))
+      (output tty "\r\n"))
     (set-screen-cursor-column! s 0)
     (set-screen-cursor-row! s (+ (screen-cursor-row s) 1))))
 

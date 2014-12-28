@@ -8,7 +8,5 @@ The status line isn't cleared away when you C-x 0.
 
 Preserve column on up/down better.
 
-Need line wrap of some kind.
-
 Catch and handle SIGWINCH.
 See http://man7.org/tlpi/code/online/dist/tty/demo_SIGWINCH.c.html

@@ -12,6 +12,7 @@
 (require "window.rkt")
 (require "display.rkt")
 (require "rope.rkt")
+(require "wrap.rkt")
 
 ;; A SizeSpec is either
 ;; -- (absolute-size PositiveInteger), a specific size in screen rows
@@ -29,7 +30,6 @@
                 ) #:prefab)
 
 (define (newline? c) (equal? c #\newline))
-(define (not-newline? c) (not (newline? c)))
 
 ;; Finseth's book defines a C routine, Framer(), which is intended to
 ;; ensure that the `top_of_window` mark, denoting the position where
@@ -40,30 +40,36 @@
 ;; will end up at a configurable percentage of the way down the
 ;; window.
 ;;
-;; Window Nat -> Nat
+;; It is here that we perform soft-wrapping of lines.
+;;
+;; Window Nat -> (List (Pair Nat Nat))
 ;; Ensures that window-top is sanely positioned with respect to
-;; window-point. Returns the new position of window-top.
-(define (frame! win available-line-count
+;; window-point. Returns wrapped line spans starting at the new
+;; window-top.
+(define (frame! win available-line-count window-width
                 #:preferred-position-fraction [preferred-position-fraction 1/2])
   (define buf (window-buffer win))
   (define old-top-of-window-pos (or (buffer-mark-pos* buf (window-top win)) 0))
   (define preferred-distance-from-bottom
     (ceiling (* available-line-count (- 1 preferred-position-fraction))))
-  (let loop ((pos (buffer-findf buf (window-point win) newline? #:forward? #f))
-             (line-count 0)
-             (top-of-window-pos old-top-of-window-pos))
-    (define new-top-of-window-pos
-      (if (= line-count preferred-distance-from-bottom) pos top-of-window-pos))
-    (cond
-     [(= pos old-top-of-window-pos)
-      old-top-of-window-pos]
-     [(>= line-count (- available-line-count 1))
-      (buffer-mark! buf (window-top win) new-top-of-window-pos)
-      new-top-of-window-pos]
-     [else
-      (loop (buffer-findf buf (- pos 1) newline? #:forward? #f)
-            (+ line-count 1)
-            new-top-of-window-pos)])))
+  (define g (buffer-lines-reverse/wrap buf (window-point win) basic-wrap window-width))
+  (define spans
+    (let loop ((line-count 0)
+               (all-spans '())
+               (preferred-spans '()))
+      (define-values (pos eol-pos) (g))
+      (define span (cons pos eol-pos))
+      (define new-all-spans (cons span all-spans))
+      (define new-preferred-spans (if (= line-count preferred-distance-from-bottom)
+                                      new-all-spans
+                                      preferred-spans))
+      (cond
+       [(not pos) all-spans] ;; we hit buffer top before our preferred distance. NB all-spans
+       [(= pos old-top-of-window-pos) new-all-spans]
+       [(>= line-count (- available-line-count 1)) new-preferred-spans]
+       [else (loop (+ line-count 1) new-all-spans new-preferred-spans)])))
+  (buffer-mark! buf (window-top win) (caar spans))
+  spans)
 
 (define (tty-body-style t is-active?)
   (tty-set-pen! t tty-default-pen))
@@ -74,36 +80,52 @@
 (define (render-window! t win window-top window-width window-height is-active?)
   (define buf (window-buffer win))
   (define available-line-count (- window-height 1))
-  (define top-of-window-pos (frame! win available-line-count))
+  (define spans (frame! win available-line-count window-width))
   (define cursor-pos (buffer-mark-pos buf (window-point win)))
   (tty-goto t window-top 0)
   (tty-body-style t is-active?)
-  (define cursor-coordinates
-    (let loop ((line-count 0)
-               (sol-pos top-of-window-pos)
-               (cursor-coordinates #f))
-      (cond
-       [(>= line-count available-line-count)
-        cursor-coordinates]
-       [else
-        (define eol-pos (buffer-findf buf sol-pos newline?))
-        (define line (rope->string (buffer-region buf sol-pos eol-pos)))
-        (define formatted-line (substring line 0 (min (string-length line) window-width)))
-        (tty-display t formatted-line)
-        (tty-clear-to-eol t)
-        (tty-newline t)
-        (loop (+ line-count 1)
-              (+ eol-pos 1)
-              (if (<= sol-pos cursor-pos eol-pos)
-                  (list (+ line-count window-top)
-                        (let ((line-to-cursor (substring line 0 (- cursor-pos sol-pos))))
-                          (buffer-string-column-count buf 0 line-to-cursor)))
-                  cursor-coordinates))])))
+
+  (define (render-span sol-pos eol-pos line-count cursor-coordinates)
+    (define line (rope->string (buffer-region buf sol-pos eol-pos)))
+    (tty-display t line)
+    (tty-newline t)
+    (if (<= sol-pos cursor-pos eol-pos)
+        (list (+ line-count window-top)
+              (let ((line-to-cursor (substring line 0 (- cursor-pos sol-pos))))
+                (buffer-string-column-count buf 0 line-to-cursor)))
+        cursor-coordinates))
+
+  (define (render-top-spans spans line-count cursor-coordinates)
+    (cond
+     [(>= line-count available-line-count) cursor-coordinates]
+     [(null? spans)
+      (define g (buffer-lines-forward/wrap buf (window-point win) basic-wrap window-width))
+      (g) ;; discard first span, since it has already been covered
+      (render-bottom-spans g line-count cursor-coordinates)]
+     [else
+      (render-top-spans (cdr spans)
+                        (+ line-count 1)
+                        (render-span (caar spans) (cdar spans) line-count cursor-coordinates))]))
+
+  (define (render-bottom-spans g line-count cursor-coordinates)
+    (if (>= line-count available-line-count)
+        cursor-coordinates
+        (let-values (((sol-pos eol-pos) (g)))
+          (if sol-pos
+              (render-bottom-spans g
+                                   (+ line-count 1)
+                                   (render-span sol-pos eol-pos line-count cursor-coordinates))
+              (begin (for ((i (- available-line-count line-count))) (tty-newline t))
+                     cursor-coordinates)))))
+
+  (define cursor-coordinates (render-top-spans spans 0 #f))
+
   (tty-statusline-style t is-active?)
   (tty-display t "-- " (buffer-title buf) " ")
   (let ((remaining-length (- (tty-columns t) 4 (string-length (buffer-title buf)))))
     (when (positive? remaining-length)
       (tty-display t (make-string remaining-length #\-))))
+
   cursor-coordinates)
 
 (define (layout-windows ws total-width total-height [minimum-height 4])
