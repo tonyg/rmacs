@@ -14,8 +14,8 @@
      (buffer-insert! buf (window-point win) (string->rope (string ch)))]
     [_ #f]))
 
-(define-command fundamental-mode (unbound-key-sequence buf #:keyseq keyseq)
-  (invoke (command 'self-insert-command buf #:keyseq keyseq)))
+(define-command fundamental-mode (unbound-key-sequence buf #:command cmd #:keyseq keyseq)
+  (invoke (replace-selector cmd 'self-insert-command)))
 
 (define-key fundamental-mode (list "C-q" '#:default) self-insert-command)
 

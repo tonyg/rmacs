@@ -50,6 +50,7 @@
          command-window
          command-editor
          (rename-out [make-command command])
+         replace-selector
          invoke
 
          define-key
@@ -346,6 +347,9 @@
                   [(buffer? buffer-or-command) buffer-or-command]
                   [(command? buffer-or-command) (command-buffer buffer-or-command)]))
   (command selector buffer window (or editor (buffer-editor buffer)) keyseq prefix-arg))
+
+(define (replace-selector cmd selector)
+  (struct-copy command cmd [selector selector]))
 
 (define (invoke cmd)
   (match-define (command selector buf _ _ keyseq _) cmd)
