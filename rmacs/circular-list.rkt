@@ -5,8 +5,11 @@
          circular-null?
          circular-pair?
          circular-cons
+         circular-snoc
          circular-car
          circular-cdr
+         circular-last
+         circular-butlast
          circular-length
          circular-list-rotate-forward
          circular-list-rotate-backward
@@ -34,18 +37,27 @@
   (and (circular-list? xs)
        (not (circular-null? xs))))
 
-(define (circular-cons->cons xs)
+(define (circular-uncons xs)
   (cons (circular-car xs)
         (circular-cdr xs)))
+
+(define (circular-unsnoc xs)
+  (cons (circular-butlast xs)
+        (circular-last xs)))
 
 (define (circular-cons* x xs)
   (circular-list (cons x (circular-list-front xs)) (circular-list-back xs)))
 
+(define (circular-snoc* xs x)
+  (circular-list (circular-list-front xs) (cons x (circular-list-back xs))))
+
 (define-match-expander circular-cons
-  (syntax-rules ()
-    [(_ a d) (? circular-pair? (app circular-cons->cons (cons a d)))])
-  (syntax-rules ()
-    [(_ a d) (circular-cons* a d)]))
+  (syntax-rules () [(_ a d) (? circular-pair? (app circular-uncons (cons a d)))])
+  (syntax-rules () [(_ a d) (circular-cons* a d)]))
+
+(define-match-expander circular-snoc
+  (syntax-rules () [(_ d a) (? circular-pair? (app circular-unsnoc (cons d a)))])
+  (syntax-rules () [(_ d a) (circular-snoc* d a)]))
 
 (define (prime! xs)
   (match xs
@@ -73,6 +85,17 @@
       (error 'circular-cdr "Empty circular list")
       (begin (prime! xs)
              (circular-list (cdr (circular-list-front xs)) (circular-list-back xs)))))
+
+(define (circular-last xs)
+  (if (circular-null? xs)
+      (error 'circular-last "Empty circular list")
+      (car (circular-list-back (anti-prime! xs)))))
+
+(define (circular-butlast xs)
+  (if (circular-null? xs)
+      (error 'circular-butlast "Empty circular list")
+      (begin (anti-prime! xs)
+             (circular-list (circular-list-front xs) (cdr (circular-list-back xs))))))
 
 (define (circular-length xs)
   (+ (length (circular-list-front xs))
@@ -194,6 +217,22 @@
                         (circular-cons 1 (circular-cons 2 circular-empty)))
                   [(circular-cons a d) (cons a (circular-list->list d))])
                 (list 2 1))
+
+  (check-equal? (match (circular-snoc circular-empty 1)
+                  [(circular-snoc d a) (cons d a)])
+                (cons circular-empty 1))
+  (check-equal? (match (circular-list-rotate-forward (circular-snoc circular-empty 1))
+                  [(circular-snoc d a) (cons d a)])
+                (cons circular-empty 1))
+  (check-equal? (match (circular-list-rotate-forward
+                        (circular-snoc (circular-snoc circular-empty 2) 1))
+                  [(circular-snoc d a) (cons a (circular-list->list d))])
+                (list 2 1))
+
+  (check-equal? (match (circular-snoc (circular-snoc circular-empty 1) 2)
+                  [(circular-cons x (circular-cons y z)) (cons x (cons y (circular-list->list z)))])
+                (list 1 2))
+
   (check-equal? (circular-list->list (circular-list-remove 2 (circular-list '(1 2 3) '(6 5 4))))
                 '(1 3 4 5 6))
   (check-equal? (circular-list->list (circular-list-remove 2 (circular-list '(1) '(6 5 4 3 2))))
