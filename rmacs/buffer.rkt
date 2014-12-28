@@ -33,6 +33,7 @@
          buffer-mark
          buffer-mark-pos*
          buffer-mark-pos
+         buffer-pos
          buffer-mark!
          buffer-clear-mark!
          buffer-move-mark!
@@ -269,6 +270,9 @@
 (define (buffer-mark-pos buf mtype [what 'buffer-mark-pos])
   (or (buffer-mark-pos* buf mtype)
       (error what "Mark type ~v not found; available mark types ~v" mtype (buffer-mark-types buf))))
+
+(define (buffer-pos buf pos-or-mtype)
+  (->pos buf pos-or-mtype 'buffer-pos))
 
 (define (buffer-mark! buf mtype pos-or-mtype #:value [value #t])
   (buffer-lift replace-mark buf mtype (->pos buf pos-or-mtype 'buffer-mark!) value))
