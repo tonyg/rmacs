@@ -118,10 +118,10 @@
                   (list (+ line-count window-top) cursor-offset)
                   cursor-coordinates))])))
   (tty-statusline-style t is-active?)
-  (tty-display t (if is-active? "== " "-- ") (buffer-title buf) " ")
+  (tty-display t "-- " (buffer-title buf) " ")
   (let ((remaining-length (- (tty-columns t) 4 (string-length (buffer-title buf)))))
     (when (positive? remaining-length)
-      (tty-display t (make-string remaining-length (if is-active? #\= #\-)))))
+      (tty-display t (make-string remaining-length #\-))))
   cursor-coordinates)
 
 (define (layout-windows ws total-height [minimum-height 4])
