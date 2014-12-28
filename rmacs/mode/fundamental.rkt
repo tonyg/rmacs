@@ -121,7 +121,7 @@
 
 (define-command fundamental-mode (split-window-below buf #:window win #:editor ed)
   #:bind-key "C-x 2"
-  (open-window ed buf #:after-window win))
+  (open-window ed buf #:after-window win #:activate? #f))
 
 (define-command fundamental-mode (delete-other-windows buf #:window win #:editor ed)
   #:bind-key "C-x 1"
