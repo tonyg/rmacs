@@ -2,6 +2,8 @@
 
 (provide (struct-out absolute-size)
          (struct-out relative-size)
+         (struct-out layout)
+         layout-windows
          render-windows!)
 
 (require racket/match)
@@ -16,6 +18,15 @@
 ;; -- (relative-size PositiveReal), a weighted window size
 (struct absolute-size (lines) #:prefab)
 (struct relative-size (weight) #:prefab)
+
+;; A Layout is a (layout Window SizeSpec Nat Nat)
+(struct layout (window ;; Window
+                size-spec ;; SizeSpec
+                top ;; Nat, a row
+                left ;; Nat, a column
+                width ;; Nat
+                height ;; Nat
+                ) #:prefab)
 
 (define (newline? c) (equal? c #\newline))
 (define (not-newline? c) (not (newline? c)))
@@ -90,7 +101,7 @@
          [_
           (emit (string c))])])))
 
-(define (render-window! t win window-top window-height is-active?)
+(define (render-window! t win window-top window-width window-height is-active?)
   (define buf (window-buffer win))
   (define available-line-count (- window-height 1))
   (define top-of-window-pos (frame! win available-line-count))
@@ -124,7 +135,7 @@
       (tty-display t (make-string remaining-length #\-))))
   cursor-coordinates)
 
-(define (layout-windows ws total-height [minimum-height 4])
+(define (layout-windows ws total-width total-height [minimum-height 4])
   (define total-weight (foldl + 0 (map (lambda (e)
                                          (match (cadr e)
                                            [(absolute-size _) 0]
@@ -137,29 +148,31 @@
   (let loop ((ws ws) (offset 0) (remaining proportional-lines))
     (match ws
       ['() '()]
-      [(cons (list w (absolute-size lines)) rest)
-       (cons (list w offset lines) (loop rest (+ offset lines) remaining))]
-      [(cons (list w (relative-size weight)) rest)
+      [(cons (list w (and spec (absolute-size lines))) rest)
+       (cons (layout w spec offset 0 total-width lines)
+             (loop rest (+ offset lines) remaining))]
+      [(cons (list w (and spec (relative-size weight))) rest)
        (define height (max minimum-height
                            (inexact->exact
                             (round (* proportional-lines (/ weight total-weight))))))
        (if (>= remaining height)
            (if (null? rest)
-               (list (list w offset remaining))
-               (cons (list w offset height) (loop rest (+ offset height) (- remaining height))))
+               (list (layout w spec offset 0 total-width remaining))
+               (cons (layout w spec offset 0 total-width height)
+                     (loop rest (+ offset height) (- remaining height))))
            (if (>= remaining minimum-height)
-               (list (list w offset remaining))
+               (list (layout w spec offset 0 total-width remaining))
                '()))])))
 
-(define (render-windows! t ws active-window)
-  (define layout (layout-windows ws (tty-rows t)))
+(define (render-windows! t layouts active-window)
   (tty-body-style t #f)
   (tty-goto t 0 0)
   (define active-cursor-position
-    (for/fold [(cursor-position #f)] [(e layout)]
-      (match-define (list w window-top window-height) e)
+    (for/fold [(cursor-position #f)] [(e layouts)]
+      (match-define (layout w _spec window-top _left window-width window-height) e)
       (define is-active? (eq? w active-window))
-      (define window-cursor-position (render-window! t w window-top window-height is-active?))
+      (define window-cursor-position
+        (render-window! t w window-top window-width window-height is-active?))
       (if is-active? window-cursor-position cursor-position)))
   (when active-cursor-position
     (tty-goto t (car active-cursor-position) (cadr active-cursor-position)))

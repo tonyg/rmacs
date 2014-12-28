@@ -2,6 +2,9 @@
 
 (provide (except-out (struct-out editor) editor)
          make-editor
+         window-layout
+         window-width
+         window-height
          open-window
          close-other-windows
          close-window
@@ -16,8 +19,7 @@
          editor-active-modeset
          editor-mainloop
          editor-request-shutdown!
-         editor-force-redisplay!
-         )
+         editor-force-redisplay!)
 
 (require racket/match)
 
@@ -36,6 +38,7 @@
                 [active-window #:mutable] ;; (Option Window)
                 [running? #:mutable] ;; Boolean
                 [default-modeset #:mutable] ;; ModeSet
+                [layout #:mutable] ;; (Option (List Layout))
                 ) #:prefab)
 
 (define (make-editor #:tty [tty (stdin-tty)]
@@ -44,15 +47,11 @@
   (define scratch (make-buffer g "*scratch*"
                                #:initial-contents ";; This is the scratch buffer.\n\n"))
   (define w (make-window scratch))
-  (window-move-to! w (buffer-size scratch))
-  (define e (editor g
-                    tty
-                    (list->circular-list (list (list w (relative-size 1))))
-                    w
-                    #f
-                    default-modeset))
+  (define ws (list->circular-list (list (list w (relative-size 1)))))
+  (define e (editor g tty ws w #f default-modeset #f))
   (initialize-buffergroup! g e)
   (configure-fresh-buffer! e scratch)
+  (window-move-to! w (buffer-size scratch))
   e)
 
 (define (configure-fresh-buffer! editor buffer)
@@ -82,25 +81,43 @@
 
 (define (entry-for? window) (lambda (e) (eq? (car e) window)))
 
-(define (window->size-spec editor window)
-  (cond [(circular-list-memf (entry-for? window)
-                             (editor-windows editor)) => (compose cadr circular-car)]
+(define (invalidate-layout! editor)
+  (set-editor-layout! editor #f))
+
+(define (layout! editor)
+  (when (not (editor-layout editor))
+    (set-editor-layout! editor (layout-windows (circular-list->list (editor-windows editor))
+                                               (tty-columns (editor-tty editor))
+                                               (tty-rows (editor-tty editor)))))
+  (editor-layout editor))
+
+(define (window-layout editor win)
+  (cond [(memf (lambda (l) (eq? (layout-window l) win)) (layout! editor)) => car]
         [else #f]))
+
+(define ((-layout-accessor- getter) editor window)
+  (cond [(window-layout editor window) => getter]
+        [else #f]))
+
+(define window-size-spec (-layout-accessor- layout-size-spec))
+(define window-width (-layout-accessor- layout-width))
+(define window-height (-layout-accessor- layout-height))
 
 (define (update-window-entry editor win updater)
   (set-editor-windows! editor (circular-list-replacef (editor-windows editor)
                                                       (entry-for? win)
-                                                      updater)))
+                                                      updater))
+  (invalidate-layout! editor))
 
 (define (open-window editor buffer
                      #:after-window [after-window (editor-active-window editor)]
                      #:proportional? [proportional? #f]
                      #:activate? [activate? #t])
   (define existing-w (window-for-buffer editor buffer))
-  (define existing-size (window->size-spec editor after-window))
+  (define existing-size (window-size-spec editor after-window))
   (define new-size (if proportional? existing-size (split-size existing-size)))
   (define new-point (or (and existing-w (buffer-mark-pos* buffer (window-point existing-w))) 0))
-  (define new-window (make-window buffer new-point))
+  (define new-window (make-window buffer #:point new-point))
   (update-window-entry editor after-window
                        (lambda (e) (list (list after-window new-size)
                                          (list new-window new-size))))
@@ -111,12 +128,13 @@
   (for ((entry (circular-list->list (editor-windows editor))) #:when (not (eq? (car entry) win)))
     (set-window-buffer! (car entry) #f))
   (set-editor-windows! editor (list->circular-list (list (list win (relative-size 1)))))
-  (set-editor-active-window! editor win))
+  (set-editor-active-window! editor win)
+  (invalidate-layout! editor))
 
 (define (close-window editor win)
   (define prev (editor-prev-window editor win))
-  (define prev-size (window->size-spec editor prev))
-  (define win-size (window->size-spec editor win))
+  (define prev-size (window-size-spec editor prev))
+  (define win-size (window-size-spec editor win))
   (when (and prev (> (circular-length (editor-windows editor)) 1))
     (when (eq? (editor-active-window editor) win) (set-editor-active-window! editor prev))
     (update-window-entry editor win (lambda (e) '()))
@@ -135,7 +153,7 @@
 
 (define (render-editor! editor)
   (render-windows! (editor-tty editor)
-                   (circular-list->list (editor-windows editor))
+                   (layout! editor)
                    (editor-active-window editor)))
 
 (define (editor-active-buffer editor)
@@ -233,17 +251,18 @@
   (set-editor-running?! editor #f))
 
 (define (editor-force-redisplay! editor)
-  (tty-reset (editor-tty editor)))
+  (tty-reset (editor-tty editor))
+  (invalidate-layout! editor))
 
 ;;---------------------------------------------------------------------------
 
-(define-command kernel-mode (save-buffers-kill-terminal buf)
+(define-command kernel-mode (save-buffers-kill-terminal buf #:editor ed)
   #:bind-key "C-x C-c"
-  (editor-request-shutdown! (buffer-editor buf)))
+  (editor-request-shutdown! ed))
 
-(define-command kernel-mode (force-redisplay buf)
+(define-command kernel-mode (force-redisplay buf #:editor ed)
   #:bind-key "C-l"
-  (editor-force-redisplay! (buffer-editor buf)))
+  (editor-force-redisplay! ed))
 
 (define-command kernel-mode (dump-buffer-to-stderr buf #:window win)
   #:bind-key "C-M-x"

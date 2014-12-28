@@ -20,7 +20,7 @@
                 [buffer #:mutable] ;; (Option Buffer)
                 ) #:prefab)
 
-(define (make-window initial-buffer [initial-point-or-mark 0])
+(define (make-window initial-buffer #:point [initial-point-or-mark 0])
   (define id (gensym 'window))
   (define w (window id
                     (mark-type (buffer-mark-type 'top id #f) 'left)
