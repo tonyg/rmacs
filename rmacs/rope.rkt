@@ -308,17 +308,23 @@
                                                           value)]))))
 
 (define (clear-mark r0 mtype position)
-  (define r (splay-to-pos 'clear-mark r0 position (lambda () (format " clearing mark ~a" mtype))))
-  (and r
-       (reindex
-        (struct-copy rope r
-                     [mark-index
-                      (let* ((old-marks (rope-mark-index r))
-                             (old-mark (hash-ref old-marks mtype (lambda () (hash)))))
-                        (define new-mark (hash-remove old-mark (- position (rope-lo r))))
-                        (if (hash-empty? new-mark)
-                            (hash-remove old-marks mtype)
-                            (hash-set old-marks mtype new-mark)))]))))
+  (let walk ((r (splay-to-pos 'clear-mark
+                              r0
+                              position
+                              (lambda () (format " clearing mark ~a" mtype)))))
+    (if (not (has-mark? r mtype))
+        r
+        (reindex
+         (struct-copy rope r
+                      [left (walk (rope-left r))]
+                      [right (walk (rope-right r))]
+                      [mark-index
+                       (let* ((old-marks (rope-mark-index r))
+                              (old-mark (hash-ref old-marks mtype (lambda () (hash)))))
+                         (define new-mark (hash-remove old-mark (- position (rope-lo r))))
+                         (if (hash-empty? new-mark)
+                             (hash-remove old-marks mtype)
+                             (hash-set old-marks mtype new-mark)))])))))
 
 (define (replace-mark r0 mtype new-pos new-value)
   (define pos (find-mark-pos r0 mtype))
@@ -558,5 +564,24 @@
                 ((_) (check-equal? (rope->string r) ""))
                 ((_) (check-equal? (rope-marks l) (seteq)))
                 ((_) (check-equal? (rope-marks r) (seteq mtype2))))
+    (void))
+
+  (let*-values (((xs) (make-string 128 #\x))
+                ((r) (string->rope (string-append "hello " xs)))
+                ((r) (set-mark r mtype2 3 #t))
+                ((l mr) (rope-split r (find-mark-pos r mtype2)))
+                ((m r) (rope-split mr 1))
+                ((_) (check-equal? (rope->string l) "hel"))
+                ((_) (check-equal? (rope->string m) "l"))
+                ((_) (check-equal? (rope->string r) (string-append "o " xs)))
+                ((_) (check-equal? (rope-marks l) (seteq)))
+                ((_) (check-equal? (rope-marks m) (seteq mtype2)))
+                ((_) (check-equal? (rope-marks r) (seteq)))
+                ((new-m) (set-mark (empty-rope) mtype2 0 #t))
+                ((r) (rope-append (rope-append l new-m) r))
+                ((_) (check-equal? (rope->string r) (string-append "helo " xs)))
+                ((_) (check-equal? (find-mark-pos r mtype2) 3))
+                ((r) (clear-mark r mtype2 (find-mark-pos r mtype2)))
+                ((_) (check-equal? (find-mark-pos r mtype2) #f)))
     (void))
   )
