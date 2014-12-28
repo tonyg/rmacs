@@ -357,11 +357,11 @@
      (define-values (left-index right-index) (partition-mark-index mark-index offset))
      (define left-strand (substrand t 0 offset))
      (define right-strand (substrand t offset))
-     (values (if (strand-empty? left-strand)
+     (values (if (and (strand-empty? left-strand) (hash-empty? left-index))
                  rl
                  (reindex
                   (rope left-strand rl (empty-rope) 'will-be-recomputed (seteq) left-index)))
-             (if (strand-empty? right-strand)
+             (if (and (strand-empty? right-strand) (hash-empty? right-index))
                  rr
                  (reindex
                   (rope right-strand (empty-rope) rr 'will-be-recomputed (seteq) right-index))))]))
@@ -550,4 +550,13 @@
          (r (splay-to-pos 'testing r 0))
          (pos (find-mark-pos r mtype1)))
     (check-equal? pos 266))
+
+  (let*-values (((r) (string->rope "hello"))
+                ((r) (set-mark r mtype2 (rope-size r) #t))
+                ((l r) (rope-split r (find-mark-pos r mtype2)))
+                ((_) (check-equal? (rope->string l) "hello"))
+                ((_) (check-equal? (rope->string r) ""))
+                ((_) (check-equal? (rope-marks l) (seteq)))
+                ((_) (check-equal? (rope-marks r) (seteq mtype2))))
+    (void))
   )
