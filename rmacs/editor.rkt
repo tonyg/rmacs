@@ -2,6 +2,7 @@
 
 (provide (except-out (struct-out editor) editor)
          make-editor
+         configure-fresh-buffer!
          window-layout
          window-width
          window-height
@@ -26,8 +27,8 @@
          editor-force-redisplay!
          clear-message
          message
-         (struct-out exn:abort)
-         abort)
+         start-recursive-edit
+         abandon-recursive-edit)
 
 (require racket/match)
 
@@ -41,8 +42,6 @@
 (require "circular-list.rkt")
 (require "file.rkt")
 
-(struct exn:abort exn (detail) #:transparent)
-
 (struct editor (buffers ;; BufferGroup
                 [tty #:mutable] ;; Tty
                 [windows #:mutable] ;; (CircularList (List Window SizeSpec)), abstract window layout
@@ -53,6 +52,8 @@
                 [last-command #:mutable] ;; (Option Command)
                 echo-area ;; Buffer
                 mini-window ;; Window
+                [message-expiry-time #:mutable] ;; (Option Number)
+                [recursive-edit #:mutable] ;; (Option Buffer)
                 ) #:prefab)
 
 (define (make-editor #:tty [tty (stdin-tty)]
@@ -64,7 +65,7 @@
   (define w (make-window scratch))
   (define ws (list->circular-list (list (list w (relative-size 1)))))
   (define miniwin (make-window echo-area))
-  (define e (editor g tty ws w #f default-modeset #f #f echo-area miniwin))
+  (define e (editor g tty ws w #f default-modeset #f #f echo-area miniwin #f #f))
   (initialize-buffergroup! g e)
   (configure-fresh-buffer! e scratch)
   (window-move-to! w (buffer-size scratch))
@@ -83,7 +84,7 @@
 
 (define (split-size s)
   (match s
-    [(absolute-size _) s] ;; can't scale fixed-size windows
+    [(absolute-size _) (relative-size 1)] ;; can't scale fixed-size windows
     [(relative-size w) (relative-size (/ w 2))]))
 
 (define (merge-sizes surviving disappearing)
@@ -165,7 +166,8 @@
   (update-window-entry editor win (lambda (e) (list (list win size)))))
 
 (define (select-window editor win)
-  (set-editor-active-window! editor win))
+  (when (window-layout editor win)
+    (set-editor-active-window! editor win)))
 
 (define (visit-file! editor filename)
   (set-window-buffer! (editor-active-window editor)
@@ -203,13 +205,17 @@
 (define (editor-command selector editor
                         #:keyseq [keyseq #f]
                         #:prefix-arg [prefix-arg '#:default])
-  (window-command selector (editor-active-window editor) #:keyseq keyseq #:prefix-arg prefix-arg))
+  (window-command selector (editor-active-window editor)
+                  #:editor editor
+                  #:keyseq keyseq
+                  #:prefix-arg prefix-arg))
 
 (define (invoke/history cmd)
   (define editor (command-editor cmd))
   (clear-message editor)
   (with-handlers* ([exn:abort? (lambda (e)
-                                 (message editor "~a" (exn-message e))
+                                 (message editor "~a" (exn-message e)
+                                          #:duration (exn:abort-duration e))
                                  (void))])
     (define result (invoke cmd))
     (set-editor-last-command! editor cmd)
@@ -253,6 +259,13 @@
                                 (lambda (_)
                                   (loop total-keyseq '() next-handler next-repaint-deadline)))
                     never-evt)
+                (let ((expiry-time (editor-message-expiry-time editor)))
+                  (if expiry-time
+                      (handle-evt (alarm-evt expiry-time)
+                                  (lambda (_)
+                                    (clear-message editor)
+                                    (loop total-keyseq '() next-handler 0)))
+                      never-evt))
                 (handle-evt (tty-next-key-evt (editor-tty editor))
                             (lambda (new-key)
                               (define new-input (list new-key))
@@ -269,12 +282,12 @@
        [else
         (match (handler editor input)
           [(unbound-key-sequence)
-           (if (invoke/history (editor-command 'unbound-key-sequence editor
-                                               #:keyseq total-keyseq))
-               (loop '() '() (root-keyseq-handler editor) (request-repaint))
-               (error 'editor-mainloop "Unbound key sequence: ~a"
-                      (keyseq->keyspec total-keyseq)))]
+           (when (not (invoke/history (editor-command 'unbound-key-sequence editor
+                                                      #:keyseq total-keyseq)))
+             (message editor "Unbound key sequence: ~a" (keyseq->keyspec total-keyseq)))
+           (loop '() '() (root-keyseq-handler editor) (request-repaint))]
           [(incomplete-key-sequence next-handler)
+           (message editor "~a-" (keyseq->keyspec total-keyseq))
            (wait-for-input next-handler)]
           [(command-invocation selector prefix-arg remaining-input)
            (define accepted-input
@@ -296,24 +309,50 @@
 
 (define (clear-message editor)
   (buffer-replace-contents! (editor-echo-area editor) (empty-rope))
+  (define re (editor-recursive-edit editor))
+  (when re (set-window-buffer! (editor-mini-window editor) re (buffer-size re)))
+  (set-editor-message-expiry-time! editor #f)
   (invalidate-layout! editor))
 
-(define (message editor fmt . args)
+(define (message #:duration [duration0 #f]
+                 editor fmt . args)
+  (define duration (or duration0 (and (editor-recursive-edit editor) 2)))
   (define msg (string->rope (apply format fmt args)))
+  (define echo-area (editor-echo-area editor))
   (let* ((msgbuf (find-buffer editor "*Messages*"))
          (msgwins (filter (lambda (w) (equal? (buffer-mark-pos msgbuf (window-point w))
                                               (buffer-size msgbuf)))
                           (windows-for-buffer editor msgbuf))))
     (buffer-insert! msgbuf (buffer-size msgbuf) (rope-append msg (string->rope "\n")))
     (for ((w msgwins)) (buffer-mark! msgbuf (window-point w) (buffer-size msgbuf))))
-  (buffer-replace-contents! (editor-echo-area editor) msg)
+  (buffer-replace-contents! echo-area msg)
+  (set-window-buffer! (editor-mini-window editor) echo-area (buffer-size echo-area))
   (invalidate-layout! editor)
+  (when duration
+    (set-editor-message-expiry-time! editor (+ (current-inexact-milliseconds) (* duration 1000.0))))
   (render-editor! editor))
 
-(define (abort #:detail [detail #f] fmt . args)
-  (raise (exn:abort (apply format fmt args)
-                    (current-continuation-marks)
-                    detail)))
+(define (start-recursive-edit editor buf)
+  (when (editor-recursive-edit editor)
+    (abort "Command attempted to use minibuffer while in minibuffer"))
+  (set-editor-recursive-edit! editor buf)
+  (define miniwin (editor-mini-window editor))
+  (set-window-buffer! miniwin buf (buffer-size buf))
+  (set-editor-windows! editor
+                       (circular-snoc (editor-windows editor)
+                                      (list miniwin (absolute-size 0))))
+  (set-editor-active-window! editor miniwin)
+  (invalidate-layout! editor))
+
+(define (abandon-recursive-edit editor)
+  (set-editor-recursive-edit! editor #f)
+  (define echo-area (editor-echo-area editor))
+  (define miniwin (editor-mini-window editor))
+  (set-window-buffer! miniwin echo-area (buffer-size echo-area))
+  (when (eq? (editor-active-window editor) miniwin)
+    (set-editor-active-window! editor (car (circular-car (editor-windows editor)))))
+  (update-window-entry editor miniwin (lambda (e) '()))
+  (invalidate-layout! editor))
 
 ;;---------------------------------------------------------------------------
 

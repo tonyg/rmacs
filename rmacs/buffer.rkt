@@ -56,6 +56,8 @@
          define-buffer-local
 
          (except-out (struct-out command) command)
+         (struct-out exn:abort)
+         abort
          copy-command
          (rename-out [make-command command])
          invoke
@@ -94,6 +96,8 @@
                 [source #:mutable] ;; (Option BufferSource)
                 [locals #:mutable] ;; (HashEqTable Symbol Any)
                 ) #:prefab)
+
+(struct exn:abort exn (detail duration) #:transparent)
 
 (struct command (selector ;; Symbol
                  buffer ;; Buffer
@@ -328,7 +332,8 @@
 (define (transfer-marks ro rn)
   (define mtypes-to-transfer
     (for/list ((mtype (rope-marks ro))
-               #:when (buffer-mark-type-preserve? (mark-type-info mtype)))
+               #:when (and (buffer-mark-type? (mark-type-info mtype))
+                           (buffer-mark-type-preserve? (mark-type-info mtype))))
       mtype))
   (for/fold [(rn rn)] [(mtype mtypes-to-transfer)]
     (define pos (case (mark-type-stickiness mtype)
@@ -341,14 +346,14 @@
   (define new-m (transfer-marks old-m (updater old-m)))
   (define delta (- (rope-size new-m) (rope-size old-m)))
   (set-buffer-rope! buf (rope-append (rope-append l new-m) r))
-  (set-buffer-dirty?! buf #t)
+  (when (buffer-source buf) (set-buffer-dirty?! buf #t))
   buf)
 
 (define (buffer-insert! buf pos-or-mtype content-rope)
   (define pos (->pos buf pos-or-mtype 'buffer-insert!))
   (define-values (l r) (rope-split (buffer-rope buf) pos))
   (set-buffer-rope! buf (rope-append (rope-append l content-rope) r))
-  (set-buffer-dirty?! buf #t)
+  (when (buffer-source buf) (set-buffer-dirty?! buf #t))
   buf)
 
 (define (buffer-replace-contents! buf content-rope)
@@ -377,7 +382,7 @@
 (define (buffer-local name [default #f])
   (case-lambda
     [(buf)
-     (hash-ref (buffer-locals buf) name default)]
+     (hash-ref (buffer-locals buf) name (lambda () default))]
     [(buf val)
      (set-buffer-locals! buf (if (equal? val default)
                                  (hash-remove (buffer-locals buf) name)
@@ -395,6 +400,14 @@
   buf)
 
 ;;---------------------------------------------------------------------------
+
+(define (abort #:detail [detail #f]
+               #:duration [duration #f]
+               fmt . args)
+  (raise (exn:abort (apply format fmt args)
+                    (current-continuation-marks)
+                    detail
+                    duration)))
 
 (define (make-command selector buffer-or-command
                       #:window [window #f]
@@ -425,7 +438,7 @@
   (match-define (command selector buf _ _ keyseq _) cmd)
   (define handler (modeset-lookup-command (buffer-modeset buf) selector))
   (when (not handler)
-    (error 'invoke "Unhandled command ~a (key sequence: ~a)"
+    (abort "Unhandled command ~a (key sequence: ~a)"
            selector
            (if keyseq (keyseq->keyspec keyseq) "N/A")))
   (handler cmd))

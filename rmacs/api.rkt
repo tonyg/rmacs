@@ -7,10 +7,12 @@
 (require "keys.rkt")
 (require "rope.rkt")
 (require "window.rkt")
+(require "minibuf.rkt")
 
 (provide (all-from-out "mode.rkt"
                        "editor.rkt"
                        "buffer.rkt"
                        "keys.rkt"
                        "rope.rkt"
-                       "window.rkt"))
+                       "window.rkt"
+                       "minibuf.rkt"))

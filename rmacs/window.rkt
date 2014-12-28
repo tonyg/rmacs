@@ -49,9 +49,14 @@
   (void))
 
 (define (window-command selector window
+                        #:editor [editor #f]
                         #:keyseq [keyseq #f]
                         #:prefix-arg [prefix-arg '#:default])
-  (command selector (window-buffer window) #:window window #:keyseq keyseq #:prefix-arg prefix-arg))
+  (command selector (window-buffer window)
+           #:window window
+           #:editor editor
+           #:keyseq keyseq
+           #:prefix-arg prefix-arg))
 
 (define (window-mark! win [pos (window-point win)])
   (buffer-mark! (window-buffer win) (window-mark win) pos)

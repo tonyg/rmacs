@@ -145,6 +145,8 @@
   (append (let loop ((ws ws) (offset 0) (remaining proportional-lines))
             (match ws
               ['() '()]
+              [(cons (list (== miniwin eq?) _) rest)
+               (loop rest offset remaining)]
               [(cons (list w (and spec (absolute-size lines))) rest)
                (cons (layout w spec offset 0 total-width lines)
                      (loop rest (+ offset lines) remaining))]

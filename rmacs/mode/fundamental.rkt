@@ -60,27 +60,27 @@
 
 (define-buffer-local last-vertical-movement-preferred-column)
 
-(define (vertical-movement-preferred-column win)
+(define (vertical-movement-preferred-column editor win)
   (define buf (window-buffer win))
   (last-vertical-movement-preferred-column
    buf
-   (or (and (editor-last-command? (buffer-editor buf)
+   (or (and (editor-last-command? editor
                                   'next-line
                                   'prev-line)
             (last-vertical-movement-preferred-column buf))
        (buffer-column buf (window-point win)))))
 
-(define-command fundamental-mode (next-line buf #:window win #:prefix-arg [count 1])
+(define-command fundamental-mode (next-line buf #:window win #:editor ed #:prefix-arg [count 1])
   #:bind-key "C-n"
   #:bind-key "<down>"
-  (define col (vertical-movement-preferred-column win))
+  (define col (vertical-movement-preferred-column ed win))
   (move-forward-n-lines win count)
   (move-to-column win col))
 
-(define-command fundamental-mode (prev-line buf #:window win #:prefix-arg [count 1])
+(define-command fundamental-mode (prev-line buf #:window win #:editor ed #:prefix-arg [count 1])
   #:bind-key "C-p"
   #:bind-key "<up>"
-  (define col (vertical-movement-preferred-column win))
+  (define col (vertical-movement-preferred-column ed win))
   (move-backward-n-lines win count)
   (move-to-column win col))
 
@@ -161,3 +161,12 @@
 (define-command fundamental-mode (save-buffer buf)
   #:bind-key "C-x C-s"
   (save-buffer! buf))
+
+(define-command fundamental-mode (execute-extended-command buf #:command cmd #:editor ed)
+  #:bind-key "M-x"
+  (read-from-minibuffer ed "M-x "
+                        #:on-accept (lambda (content)
+                                      (define selector (string->symbol content))
+                                      (invoke (copy-command cmd
+                                                            #:selector (string->symbol content)
+                                                            #:keyseq #f)))))
