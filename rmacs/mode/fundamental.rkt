@@ -4,6 +4,7 @@
 
 (require racket/set)
 (require racket/match)
+(require racket/string)
 (require "../api.rkt")
 
 (define fundamental-mode (make-mode "fundamental"))
@@ -172,3 +173,18 @@
                                  (invoke (copy-command cmd
                                                        #:selector (string->symbol content)
                                                        #:keyseq #f)))))
+
+(define-command fundamental-mode (switch-to-buffer buf #:window win #:editor ed)
+  #:bind-key "C-x b"
+  (define default-target (buffer-next buf))
+  (completing-read ed
+                   (format "Switch to buffer~a: "
+                           (if default-target
+                               (format " (default ~a)" (buffer-title default-target))
+                               ""))
+                   (simple-completion (buffergroup-buffer-titles (editor-buffers ed)))
+                   #:on-accept (lambda (title0)
+                                 (define title1 (string-trim title0))
+                                 (define title (if (equal? title1 "") #f title1))
+                                 (define target (if title (find-buffer ed title) default-target))
+                                 (set-window-buffer! win target))))

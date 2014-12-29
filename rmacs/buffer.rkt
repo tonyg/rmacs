@@ -3,6 +3,7 @@
 (provide (struct-out buffer-mark-type)
          make-buffergroup
          initialize-buffergroup!
+         buffergroup-buffer-titles
          buffer?
          make-buffer
          register-buffer!
@@ -115,6 +116,9 @@
     (error 'initialize-buffergroup! "Duplicate initialization of buffergroup"))
   (set-buffergroup-editor! g editor)
   g)
+
+(define (buffergroup-buffer-titles g)
+  (map buffer-title (circular-list->list (buffergroup-members g))))
 
 (define (initial-contents-rope initial-contents)
   (cond

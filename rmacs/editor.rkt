@@ -3,6 +3,7 @@
 (provide (except-out (struct-out editor) editor)
          make-editor
          configure-fresh-buffer!
+         find-buffer
          window-layout
          window-width
          window-height
@@ -288,7 +289,7 @@
              (message editor "Unbound key sequence: ~a" (keyseq->keyspec total-keyseq)))
            (loop '() '() (root-keyseq-handler editor) (request-repaint))]
           [(incomplete-key-sequence next-handler)
-           (message editor "~a-" (keyseq->keyspec total-keyseq))
+           (message #:log? #f editor "~a-" (keyseq->keyspec total-keyseq))
            (wait-for-input next-handler)]
           [(command-invocation selector prefix-arg remaining-input)
            (define accepted-input
@@ -318,16 +319,18 @@
     (invalidate-layout! editor)))
 
 (define (message #:duration [duration0 #f]
+                 #:log? [log? #t]
                  editor fmt . args)
   (define duration (or duration0 (and (editor-recursive-edit editor) 2)))
   (define msg (string->rope (apply format fmt args)))
   (define echo-area (editor-echo-area editor))
-  (let* ((msgbuf (find-buffer editor "*Messages*"))
-         (msgwins (filter (lambda (w) (equal? (buffer-mark-pos msgbuf (window-point w))
-                                              (buffer-size msgbuf)))
-                          (windows-for-buffer editor msgbuf))))
-    (buffer-insert! msgbuf (buffer-size msgbuf) (rope-append msg (string->rope "\n")))
-    (for ((w msgwins)) (buffer-mark! msgbuf (window-point w) (buffer-size msgbuf))))
+  (when log?
+    (let* ((msgbuf (find-buffer editor "*Messages*"))
+           (msgwins (filter (lambda (w) (equal? (buffer-mark-pos msgbuf (window-point w))
+                                                (buffer-size msgbuf)))
+                            (windows-for-buffer editor msgbuf))))
+      (buffer-insert! msgbuf (buffer-size msgbuf) (rope-append msg (string->rope "\n")))
+      (for ((w msgwins)) (buffer-mark! msgbuf (window-point w) (buffer-size msgbuf)))))
   (buffer-replace-contents! echo-area msg)
   (set-window-buffer! (editor-mini-window editor) echo-area (buffer-size echo-area))
   (invalidate-layout! editor)
