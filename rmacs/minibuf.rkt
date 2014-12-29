@@ -127,20 +127,21 @@
   (define unfiltered-completions ((completing-read-completion-hook buf) prefix string=?))
   (define completions (filter (lambda (s) (string-prefix? prefix s string=?))
                               unfiltered-completions))
-  (when (pair? completions)
-    (define common-prefix (common-string-prefix completions string=?))
-    (define complete? (null? (cdr completions)))
-    (if (string=? common-prefix prefix)
-        ;; No progress.
-        (if complete?
-            (message ed "Sole completion")
-            (message ed "Completions: ~a" completions))
-        ;; Some progress
-        (buffer-region-update! buf
-                               recursive-edit-field-start
-                               (buffer-size buf)
-                               (lambda (_old)
-                                 (string->rope common-prefix))))))
+  (if (pair? completions)
+      (let ((common-prefix (common-string-prefix completions string=?))
+            (complete? (null? (cdr completions))))
+        (if (string=? common-prefix prefix)
+            ;; No progress.
+            (if complete?
+                (message ed "Sole completion")
+                (message ed "Completions: ~a" completions))
+            ;; Some progress
+            (buffer-region-update! buf
+                                   recursive-edit-field-start
+                                   (buffer-size buf)
+                                   (lambda (_old)
+                                     (string->rope common-prefix)))))
+      (message ed "No match")))
 
 (define-command completing-read-mode (exit-minibuffer buf
                                                       #:next-method next-method
