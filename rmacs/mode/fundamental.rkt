@@ -12,19 +12,20 @@
   (match keyseq
     [(list (key (? char? ch) modifiers)) #:when (set-empty? (set-remove modifiers 'shift))
      (buffer-insert! buf (window-point win) (string->rope (string ch)))]
-    [(list (key (? char? ch0) modifiers)) #:when (equal? modifiers (set 'control))
-     (define ch (integer->char (- (char->integer (char-upcase ch0)) (char->integer #\A) -1)))
-     (buffer-insert! buf (window-point win) (string->rope (string ch)))]
     [_ #f]))
 
 (define-command fundamental-mode (unbound-key-sequence buf #:command cmd #:keyseq keyseq)
   (invoke (copy-command cmd #:selector 'self-insert-command)))
 
-(define-command fundamental-mode (quoted-insert buf #:command cmd #:keyseq keyseq)
+(define-command fundamental-mode (quoted-insert buf #:window win #:keyseq keyseq)
   #:bind-key "C-q #:default"
-  (invoke (copy-command cmd
-                        #:selector 'self-insert-command
-                        #:keyseq (list (cadr keyseq)))))
+  (match keyseq
+    [(list _ (key (? char? ch) modifiers)) #:when (set-empty? (set-remove modifiers 'shift))
+     (buffer-insert! buf (window-point win) (string->rope (string ch)))]
+    [(list _ (key (? char? ch0) modifiers)) #:when (equal? modifiers (set 'control))
+     (define ch (integer->char (- (char->integer (char-upcase ch0)) (char->integer #\A) -1)))
+     (buffer-insert! buf (window-point win) (string->rope (string ch)))]
+    [_ #f]))
 
 (define-command fundamental-mode (newline buf #:window win)
   #:bind-key "C-m"
