@@ -371,7 +371,7 @@
   #:bind-key "C-g"
   (abort "Quit"))
 
-(define-command kernel-mode (dump-buffer-to-stderr buf #:window win)
+(define-command kernel-mode (dump-buffer-to-stderr buf #:window win #:editor ed)
   #:bind-key "C-M-x"
   (local-require racket/pretty)
   (log-info "")
@@ -387,4 +387,18 @@
   (pretty-write (buffer-rope buf) (current-error-port))
   (log-info "modeset:")
   (pretty-write (buffer-modeset buf) (current-error-port))
+  (let ((t (editor-tty ed)))
+    (log-info "terminal width ~v height ~v cursor-row ~v -col ~v"
+              (tty-columns t) (tty-rows t) (tty-cursor-row t) (tty-cursor-column t)))
+  (log-info "editor layout:")
+  (cond [(editor-layout ed) =>
+         (lambda (layouts)
+           (for ((l layouts))
+             (match-define (layout w s tt ll ww hh) l)
+             (log-info " - ~a ~v top ~a left ~a width ~a height ~a"
+                       (window-id w) s tt ll ww hh)))]
+        [else (log-info " - not cached")])
+  (log-info "editor size-specs: ~v"
+            (for/list ((e (circular-list->list (editor-windows ed))))
+              (list (window-id (car e)) (cadr e))))
   (log-info "--------------------------------------------------------------------------------"))
