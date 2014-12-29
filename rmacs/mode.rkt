@@ -16,6 +16,7 @@
          mode-define-command!
          mode-undefine-command!
          mode-redefine-command!
+         mode-command-selectors
 
          make-modeset
          modeset-add-mode
@@ -23,6 +24,7 @@
          modeset-toggle-mode
          modeset-keyseq-handler
          modeset-lookup-command
+         modeset-command-selectors
 
          kernel-mode
          kernel-modeset)
@@ -114,6 +116,9 @@
 (define (mode-redefine-command! m selector handler)
   (mode-define-command! (mode-undefine-command! m selector) selector handler))
 
+(define (mode-command-selectors m)
+  (list->seteq (hash-keys (mode-commands m))))
+
 (define (make-modeset)
   (modeset (hasheq)
            '()
@@ -196,6 +201,10 @@
                         (define next-method (search rest))
                         (when next-method (next-method cmd)))))
            (search rest))])))
+
+(define (modeset-command-selectors ms)
+  (for/fold [(selectors (seteq))] [(m (hash-values (modeset-modes ms)))]
+    (set-union selectors (mode-command-selectors m))))
 
 (define kernel-mode
   (mode-add-constraints (make-raw-mode "kernel")

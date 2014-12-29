@@ -185,8 +185,9 @@
   (and w (window-buffer w)))
 
 (define (editor-active-modeset editor)
-  (define b (editor-active-buffer editor))
-  (and b (buffer-modeset b)))
+  (let* ((b (editor-active-buffer editor))
+         (b (if (eq? b (editor-echo-area editor)) (editor-recursive-edit editor) b)))
+    (and b (buffer-modeset b))))
 
 (define (editor-next-window editor win)
   (cond [(circular-list-memf (entry-for? win)
@@ -212,7 +213,6 @@
 
 (define (invoke/history cmd)
   (define editor (command-editor cmd))
-  (clear-message editor)
   (with-handlers* ([exn:abort? (lambda (e)
                                  (message editor "~a" (exn-message e)
                                           #:duration (exn:abort-duration e))
@@ -269,6 +269,7 @@
                 (handle-evt (tty-next-key-evt (editor-tty editor))
                             (lambda (new-key)
                               (define new-input (list new-key))
+                              (clear-message editor)
                               (loop (append total-keyseq new-input)
                                     new-input
                                     next-handler
@@ -308,11 +309,13 @@
   (invalidate-layout! editor))
 
 (define (clear-message editor)
-  (buffer-replace-contents! (editor-echo-area editor) (empty-rope))
-  (define re (editor-recursive-edit editor))
-  (when re (set-window-buffer! (editor-mini-window editor) re (buffer-size re)))
-  (set-editor-message-expiry-time! editor #f)
-  (invalidate-layout! editor))
+  (when (positive? (buffer-size (editor-echo-area editor)))
+    (buffer-replace-contents! (editor-echo-area editor) (empty-rope))
+    (define re (editor-recursive-edit editor))
+    (when (and re (not (eq? (window-buffer (editor-mini-window editor)) re)))
+      (set-window-buffer! (editor-mini-window editor) re (buffer-size re)))
+    (set-editor-message-expiry-time! editor #f)
+    (invalidate-layout! editor)))
 
 (define (message #:duration [duration0 #f]
                  editor fmt . args)

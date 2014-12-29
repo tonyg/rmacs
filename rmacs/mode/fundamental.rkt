@@ -164,9 +164,10 @@
 
 (define-command fundamental-mode (execute-extended-command buf #:command cmd #:editor ed)
   #:bind-key "M-x"
-  (read-from-minibuffer ed "M-x "
-                        #:on-accept (lambda (content)
-                                      (define selector (string->symbol content))
-                                      (invoke (copy-command cmd
-                                                            #:selector (string->symbol content)
-                                                            #:keyseq #f)))))
+  (completing-read ed "M-x "
+                   (simple-completion (modeset-command-selectors (buffer-modeset buf)))
+                   #:on-accept (lambda (content)
+                                 (define selector (string->symbol content))
+                                 (invoke (copy-command cmd
+                                                       #:selector (string->symbol content)
+                                                       #:keyseq #f)))))
