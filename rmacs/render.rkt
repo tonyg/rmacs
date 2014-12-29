@@ -142,7 +142,9 @@
                                                           [(absolute-size lines) lines]
                                                           [(relative-size _) 0])) ws)))
   (define proportional-lines (- total-height reserved-lines))
-  (append (let loop ((ws ws) (offset 0) (remaining proportional-lines))
+  (define ws-without-miniwin ;; miniwin is in ws when minibuffer active; otherwise, not
+    (filter (lambda (e) (not (eq? (car e) miniwin))) ws))
+  (append (let loop ((ws ws-without-miniwin) (offset 0) (remaining proportional-lines))
             (match ws
               ['() '()]
               [(cons (list (== miniwin eq?) _) rest)
