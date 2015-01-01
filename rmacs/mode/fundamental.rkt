@@ -119,13 +119,13 @@
   #:bind-key "M-<"
   #:bind-key "C-<home>"
   #:bind-key "<begin>"
-  (if (eq? tenths '#:prefix) (set! tenths 0) (set-window-mark! win))
+  (if (eq? tenths '#:universal) (set! tenths 0) (set-window-mark! win))
   (window-move-to! win (* (buffer-size buf) (max 0 (min 10 tenths)) 1/10)))
 
 (define-command fundamental-mode (end-of-buffer #:buffer buf #:window win #:prefix-arg [tenths 0])
   #:bind-key "M->"
   #:bind-key "C-<end>"
-  (if (eq? tenths '#:prefix) (set! tenths 0) (set-window-mark! win))
+  (if (eq? tenths '#:universal) (set! tenths 0) (set-window-mark! win))
   (window-move-to! win (* (buffer-size buf) (- 10 (max 0 (min 10 tenths))) 1/10)))
 
 (define-command fundamental-mode (exchange-point-and-mark #:buffer buf #:window win)
@@ -138,7 +138,7 @@
 (define-command fundamental-mode (set-mark-command #:buffer buf #:window win #:prefix-arg arg)
   #:bind-key "C-@"
   #:bind-key "C-space"
-  (if (eq? arg '#:prefix)
+  (if (eq? arg '#:universal)
       (let ((m (buffer-mark-pos* buf (window-mark win))))
         (and m (window-move-to! win m)))
       (set-window-mark! win)))

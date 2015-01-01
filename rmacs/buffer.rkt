@@ -476,12 +476,12 @@
                                     #:defaults ([keyseq #'keyseq])
                                     #:name "#:keyseq")
                          (~optional (~seq #:prefix-arg
-                                          (~or (~seq [prefix-arg prefix-default prefix-prefix])
+                                          (~or (~seq [prefix-arg prefix-default prefix-universal])
                                                (~seq [prefix-arg prefix-default])
                                                prefix-arg))
                                     #:defaults ([prefix-arg #'pa]
                                                 [prefix-default #''#:default]
-                                                [prefix-prefix #''#:prefix])
+                                                [prefix-universal #''#:universal])
                                     #:name "#:prefix-arg"))
                     ...)
           (~seq #:bind-key bind-keyspec-exps) ...
@@ -498,7 +498,7 @@
                                                           prefix-arg) cmd)
                                    (let ((prefix-arg (match prefix-arg
                                                        ['#:default prefix-default]
-                                                       ['#:prefix prefix-prefix]
+                                                       ['#:universal prefix-universal]
                                                        [_ prefix-arg])))
                                      body ...)))
            #,@(for/list ((bind-keyspec-exp (syntax->list #'(bind-keyspec-exps ...))))
