@@ -50,7 +50,7 @@
 (define-buffer-local recursive-edit-accept-hook (lambda (content) (void)))
 (define-buffer-local recursive-edit-cancel-hook (lambda () (void)))
 
-(define-command recursive-edit-mode (abort-recursive-edit buf #:editor ed)
+(define-command recursive-edit-mode (abort-recursive-edit #:buffer buf #:editor ed)
   #:bind-key "C-g"
   (abandon-recursive-edit ed)
   (select-window ed (recursive-edit-selected-window buf))
@@ -59,14 +59,14 @@
 (define (recursive-edit-contents buf)
   (rope->string (buffer-region buf recursive-edit-field-start (buffer-size buf))))
 
-(define-command recursive-edit-mode (exit-minibuffer buf #:editor ed)
+(define-command recursive-edit-mode (exit-minibuffer #:buffer buf #:editor ed)
   #:bind-key "C-m"
   #:bind-key "C-j"
   (abandon-recursive-edit ed)
   (select-window ed (recursive-edit-selected-window buf))
   ((recursive-edit-accept-hook buf) (recursive-edit-contents buf)))
 
-(define-command recursive-edit-mode (minibuf-beginning-of-line buf #:window win)
+(define-command recursive-edit-mode (minibuf-beginning-of-line #:buffer buf #:window win)
   #:bind-key "C-a"
   #:bind-key "<home>"
   (define limit (buffer-mark-pos* buf recursive-edit-field-start))
@@ -119,7 +119,7 @@
                        (- i 1)))))
         (substring (car strs) 0 len))))
 
-(define-command completing-read-mode (minibuffer-complete buf #:editor ed)
+(define-command completing-read-mode (minibuffer-complete #:buffer buf #:editor ed)
   #:bind-key "C-i"
   #:bind-key "tab"
   (define string=? (completing-read-string=?-hook buf))
@@ -143,7 +143,7 @@
                                      (string->rope common-prefix)))))
       (message ed "No match")))
 
-(define-command completing-read-mode (exit-minibuffer buf
+(define-command completing-read-mode (exit-minibuffer #:buffer buf
                                                       #:next-method next-method
                                                       #:command cmd
                                                       #:editor ed)

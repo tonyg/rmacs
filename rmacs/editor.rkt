@@ -362,19 +362,19 @@
 
 ;;---------------------------------------------------------------------------
 
-(define-command kernel-mode (save-buffers-kill-terminal buf #:editor ed)
+(define-command kernel-mode (save-buffers-kill-terminal #:editor ed)
   #:bind-key "C-x C-c"
   (editor-request-shutdown! ed))
 
-(define-command kernel-mode (force-redisplay buf #:editor ed)
+(define-command kernel-mode (force-redisplay #:editor ed)
   #:bind-key "C-l"
   (editor-force-redisplay! ed))
 
-(define-command kernel-mode (keyboard-quit buf)
+(define-command kernel-mode (keyboard-quit)
   #:bind-key "C-g"
   (abort "Quit"))
 
-(define-command kernel-mode (dump-buffer-to-stderr buf #:window win #:editor ed)
+(define-command kernel-mode (dump-buffer-to-stderr #:buffer buf #:window win #:editor ed)
   #:bind-key "C-M-x"
   (local-require racket/pretty)
   (log-info "")

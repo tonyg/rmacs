@@ -454,8 +454,7 @@
   (lambda (stx)
     (syntax-parse stx
       [(_ mode-exp
-          (selector buffer
-                    (~or (~optional (~seq #:next-method next-method)
+          (selector (~or (~optional (~seq #:next-method next-method)
                                     #:defaults ([next-method #'nm])
                                     #:name "#:next-method")
                          (~optional (~seq #:command cmd)
@@ -464,6 +463,9 @@
                          (~optional (~seq #:selector self-selector)
                                     #:defaults ([self-selector #'self])
                                     #:name "#:selector")
+                         (~optional (~seq #:buffer buffer)
+                                    #:defaults ([buffer #'buf])
+                                    #:name "#:buffer")
                          (~optional (~seq #:window window)
                                     #:defaults ([window #'win])
                                     #:name "#:window")
