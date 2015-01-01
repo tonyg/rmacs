@@ -1,5 +1,5 @@
-PACKAGENAME=ansi
-COLLECTS=ansi rmacs
+PACKAGENAME=rmacs
+COLLECTS=rmacs
 
 all: setup
 

@@ -1,1 +1,1 @@
-ANSI and VT10x escape sequences.
+An EMACS written in Racket. Runs in ANSI-compatible terminals.

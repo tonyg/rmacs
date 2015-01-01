@@ -22,7 +22,7 @@
    (rmacs #:initial-files (match (current-command-line-arguments)
                             ['#()
                              (list
-                              (build-path (collection-file-path "main.rkt" "rmacs")
+                              (build-path (collection-file-path "main.rkt" "ansi")
                                           'up 'up "doc" "xterm_controls.txt"))]
                             [(vector files ...)
                              files])))
