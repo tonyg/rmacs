@@ -110,38 +110,38 @@
   (define pos (buffer-mark-pos buf (window-point win)))
   (buffer-region-update! buf pos (+ pos 1) (lambda (_deleted) (empty-rope))))
 
-(define (set-window-mark! win [pos (window-point win)])
-  (window-mark! win pos)
-  (message (window-editor win) "Mark set")
+(define (set-mark! win [pos (window-point win)] #:noisy? [noisy? #t])
+  (buffer-mark! (window-buffer win) region-mark pos)
+  (when noisy? (message (window-editor win) "Mark set"))
   pos)
 
 (define-command fundamental-mode (beginning-of-buffer #:buffer buf #:window win #:prefix-arg [tenths 0])
   #:bind-key "M-<"
   #:bind-key "C-<home>"
   #:bind-key "<begin>"
-  (if (eq? tenths '#:universal) (set! tenths 0) (set-window-mark! win))
+  (if (eq? tenths '#:universal) (set! tenths 0) (set-mark! win))
   (window-move-to! win (* (buffer-size buf) (max 0 (min 10 tenths)) 1/10)))
 
 (define-command fundamental-mode (end-of-buffer #:buffer buf #:window win #:prefix-arg [tenths 0])
   #:bind-key "M->"
   #:bind-key "C-<end>"
-  (if (eq? tenths '#:universal) (set! tenths 0) (set-window-mark! win))
+  (if (eq? tenths '#:universal) (set! tenths 0) (set-mark! win))
   (window-move-to! win (* (buffer-size buf) (- 10 (max 0 (min 10 tenths))) 1/10)))
 
 (define-command fundamental-mode (exchange-point-and-mark #:buffer buf #:window win)
   #:bind-key "C-x C-x"
-  (define m (buffer-mark-pos* buf (window-mark win)))
+  (define m (buffer-mark-pos* buf region-mark))
   (when m
-    (window-mark! win)
+    (set-mark! win #:noisy? #f)
     (window-move-to! win m)))
 
 (define-command fundamental-mode (set-mark-command #:buffer buf #:window win #:prefix-arg arg)
   #:bind-key "C-@"
   #:bind-key "C-space"
   (if (eq? arg '#:universal)
-      (let ((m (buffer-mark-pos* buf (window-mark win))))
+      (let ((m (buffer-mark-pos* buf region-mark)))
         (and m (window-move-to! win m)))
-      (set-window-mark! win)))
+      (set-mark! win)))
 
 (define-command fundamental-mode (split-window-below #:buffer buf #:window win #:editor ed)
   #:bind-key "C-x 2"

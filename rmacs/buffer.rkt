@@ -1,6 +1,7 @@
 #lang racket/base
 
 (provide (struct-out buffer-mark-type)
+         region-mark
          make-buffergroup
          initialize-buffergroup!
          buffergroup-buffer-titles
@@ -81,7 +82,7 @@
 (require "file.rkt")
 
 (struct buffer-mark-type (kind ;; Symbol
-                          window-id ;; Symbol
+                          window-id ;; (Option Symbol)
                           preserve? ;; Boolean
                           ) #:prefab)
 
@@ -107,6 +108,8 @@
                  keyseq ;; (Option Keyseq)
                  prefix-arg ;; Any
                  ) #:prefab)
+
+(define region-mark (mark-type (buffer-mark-type 'mark #f #f) 'left))
 
 (define (make-buffergroup)
   (buffergroup circular-empty #f))

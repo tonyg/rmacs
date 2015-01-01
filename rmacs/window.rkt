@@ -5,7 +5,6 @@
          make-window
          window-editor
          window-command
-         window-mark!
          window-move-to!
          )
 
@@ -17,7 +16,6 @@
 (struct window (id ;; Symbol
                 top ;; MarkType
                 point ;; MarkType
-                mark ;; MarkType
                 [buffer #:mutable] ;; (Option Buffer)
                 [status-line? #:mutable] ;; Boolean
                 ) #:prefab)
@@ -27,7 +25,6 @@
   (define w (window id
                     (mark-type (buffer-mark-type 'top id #f) 'left)
                     (mark-type (buffer-mark-type 'point id #t) 'right)
-                    (mark-type (buffer-mark-type 'mark id #f) 'left)
                     #f
                     #t))
   (set-window-buffer!* w initial-buffer initial-point-or-mark) ;; sets initial marks
@@ -41,8 +38,7 @@
   (define old (window-buffer win))
   (when old
     (buffer-clear-mark! old (window-top win))
-    (buffer-clear-mark! old (window-point win))
-    (buffer-clear-mark! old (window-mark win)))
+    (buffer-clear-mark! old (window-point win)))
   (set-window-buffer! win new)
   (when new
     (buffer-mark! new (window-point win) point-or-mark))
@@ -57,10 +53,6 @@
            #:editor editor
            #:keyseq keyseq
            #:prefix-arg prefix-arg))
-
-(define (window-mark! win [pos (window-point win)])
-  (buffer-mark! (window-buffer win) (window-mark win) pos)
-  win)
 
 (define (window-move-to! win pos)
   (buffer-mark! (window-buffer win) (window-point win) pos)

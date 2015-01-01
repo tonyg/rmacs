@@ -384,7 +384,7 @@
   (log-info "id ~v" (window-id win))
   (log-info "top ~v ~v" (window-top win) (buffer-mark-pos* buf (window-top win)))
   (log-info "point ~v ~v" (window-point win) (buffer-mark-pos* buf (window-point win)))
-  (log-info "mark ~v ~v" (window-mark win) (buffer-mark-pos* buf (window-mark win)))
+  (log-info "mark ~v" (buffer-mark-pos* buf region-mark))
   (log-info "title ~v" (buffer-title buf))
   (log-info "rope:")
   (pretty-write (buffer-rope buf) (current-error-port))
