@@ -121,7 +121,7 @@
 
 (define (set-mark! win [pos (window-point win)] #:noisy? [noisy? #t])
   (buffer-mark! (window-buffer win) region-mark pos)
-  (when noisy? (message (window-editor win) "Mark set"))
+  (when (and noisy? (window-editor win)) (message (window-editor win) "Mark set"))
   pos)
 
 (define-command fundamental-mode
