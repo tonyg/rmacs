@@ -25,6 +25,7 @@
          rope-concat
          subrope
          rope-generator
+         open-input-rope
          rope-seek
 
          (struct-out mark-type)
@@ -473,6 +474,36 @@
                           (yield (string-ref text (+ offset i)))))
                       (outer (rope-left r))))))))
 
+(define (open-input-rope r #:name [name "<rope>"])
+  (define buffer #"")
+  (define offset 0)
+  (define stack (list r))
+  (define (read-bytes! bs)
+    (let retry ()
+      (define available (- (bytes-length buffer) offset))
+      (if (zero? available)
+          (match stack
+            ['() eof]
+            [(cons (? rope-empty?) rest)
+             (set! stack rest)
+             (retry)]
+            [(cons (? strand? new-strand) rest)
+             (set! buffer (string->bytes/utf-8 (strand->string new-strand)))
+             (set! offset 0)
+             (set! stack rest)
+             (retry)]
+            [(cons (? rope? r) rest)
+             (set! stack (list* (rope-left r) (rope-strand r) (rope-right r) stack))
+             (retry)])
+          (let ((count (min available (bytes-length bs))))
+            (bytes-copy! bs 0 buffer offset (+ offset count))
+            (set! offset (+ offset count))
+            count))))
+  (make-input-port name
+                   read-bytes!
+                   #f
+                   void))
+
 (define (rope-seek r0 pos)
   (splay-to-pos 'rope-seek r0 pos))
 
@@ -675,4 +706,7 @@
                 ((r) (clear-mark r mtype2 (find-mark-pos r mtype2)))
                 ((_) (check-equal? (find-mark-pos r mtype2) #f)))
     (void))
+
+  (check-equal? (read (open-input-rope (string->rope "(a b c)"))) '(a b c))
+  (check-true (eof-object? (read (open-input-rope (empty-rope)))))
   )
