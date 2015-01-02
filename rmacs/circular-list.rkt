@@ -11,6 +11,8 @@
          circular-last
          circular-butlast
          circular-length
+         circular-list-ref
+         circular-list-rotate
          circular-list-rotate-forward
          circular-list-rotate-backward
          list->circular-list
@@ -22,7 +24,7 @@
          circular-list-replacef)
 
 (require racket/match)
-(require (only-in racket/list splitf-at))
+(require (only-in racket/list splitf-at split-at))
 
 (struct circular-list ([front #:mutable]
                        [back #:mutable]
@@ -101,21 +103,29 @@
   (+ (length (circular-list-front xs))
      (length (circular-list-back xs))))
 
-(define (circular-list-rotate-forward xs)
-  (if (circular-null? xs)
-      xs
-      (begin (prime! xs)
-             (circular-list (cdr (circular-list-front xs))
-                            (cons (car (circular-list-front xs))
-                                  (circular-list-back xs))))))
+(define (circular-list-ref xs index0)
+  (define fl (length (circular-list-front xs)))
+  (define bl (length (circular-list-back xs)))
+  (define index (modulo index0 (+ fl bl)))
+  (if (< index fl)
+      (list-ref (circular-list-front xs) index)
+      (list-ref (circular-list-back xs) (- (- bl 1) (- index fl)))))
 
-(define (circular-list-rotate-backward xs)
-  (if (circular-null? xs)
-      xs
-      (begin (anti-prime! xs)
-             (circular-list (cons (car (circular-list-back xs))
-                                  (circular-list-front xs))
-                            (cdr (circular-list-back xs))))))
+(define (circular-list-rotate xs count0)
+  (cond [(circular-null? xs) xs]
+        [else (define f (circular-list-front xs))
+              (define b (circular-list-back xs))
+              (define fl (length f))
+              (define bl (length b))
+              (define count (modulo count0 (+ fl bl)))
+              (if (<= count fl)
+                  (let-values (((ft fd) (split-at f count)))
+                    (circular-list fd (append (reverse ft) b)))
+                  (let-values (((bt bd) (split-at b (- (+ fl bl) count))))
+                    (circular-list (append (reverse bt) f) bd)))]))
+
+(define (circular-list-rotate-forward xs [count 1]) (circular-list-rotate xs count))
+(define (circular-list-rotate-backward xs [count 1]) (circular-list-rotate xs (- count)))
 
 (define (list->circular-list xs)
   (circular-list xs '()))
@@ -240,5 +250,47 @@
   (check-equal? (circular-list->list (circular-list-remove 2 (circular-list '(1 2 3 2) '(6 5 2 4))))
                 '(1 3 2 4 2 5 6))
   (check-equal? (circular-list->list (circular-list-remove 2 (circular-list '(1) '(6 5 2 4 2 3 2))))
-                '(1 3 2 4 2 5 6)))
+                '(1 3 2 4 2 5 6))
 
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) 0) 'a)
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) 1) 'b)
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) 2) 'c)
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) 3) 'd)
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) 4) 'e)
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) 5) 'f)
+
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) 6) 'a)
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) 10) 'e)
+
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) -4) 'c)
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) -6) 'a)
+  (check-equal? (circular-list-ref (circular-list '(a b c) '(f e d)) -10) 'c)
+
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) 0)
+                (circular-list '(a b c) '(f e d)))
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) 1)
+                (circular-list '(b c) '(a f e d)))
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) 2)
+                (circular-list '(c) '(b a f e d)))
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) 3)
+                (circular-list '() '(c b a f e d)))
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) 4)
+                (circular-list '(e f a b c) '(d)))
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) 5)
+                (circular-list '(f a b c) '(e d)))
+
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) 6)
+                (circular-list '(a b c) '(f e d)))
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) 10)
+                (circular-list '(e f a b c) '(d)))
+
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) -4)
+                (circular-list '(c) '(b a f e d)))
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) -6)
+                (circular-list '(a b c) '(f e d)))
+  (check-equal? (circular-list-rotate (circular-list '(a b c) '(f e d)) -10)
+                (circular-list '(c) '(b a f e d)))
+
+  (check-equal? (circular-list-rotate (circular-list '() '(c b a f e d)) 1)
+                (circular-list '(e f a b c) '(d)))
+  )
