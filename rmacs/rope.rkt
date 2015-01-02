@@ -1,6 +1,9 @@
 #lang racket/base
 ;; Ropes for text editing
 
+;; TODO: Consider possible invariant that marks in mark-index should
+;; fall within [lo,hi).
+
 (provide empty-strand
          string->strand
          strand->string
@@ -33,7 +36,10 @@
          set-mark
          clear-mark
          replace-mark
-         clear-all-marks)
+         clear-all-marks
+
+         ;; dump-mark-tree
+         )
 
 (require racket/set)
 (require racket/match)
@@ -217,7 +223,8 @@
 ;;   (define (-> r offset)
 ;;     (if r
 ;;         (let-values (((lo hi) (rope-lo+hi r)))
-;;           (list (list 'marks* (set->list (rope-marks* r)))
+;;           (list ;; (list 'text (strand->string (rope-strand r)))
+;;                 (list 'marks* (set->list (rope-marks* r)))
 ;;                 (list 'mark-index
 ;;                       (for*/list (((k t) (in-hash (rope-mark-index r)))
 ;;                                   ((p v) (in-hash t)))
@@ -227,7 +234,8 @@
 ;;                 (list 'right (-> (rope-right r) (+ offset hi)))))
 ;;         'empty))
 ;;   (local-require racket/pretty)
-;;   (pretty-print (-> r offset) (current-error-port)))
+;;   (pretty-print (-> r offset) (current-error-port))
+;;   r)
 
 ;; Searches from pos (inclusive) in the direction indicated.
 ;; Pos points to a mark-position, not a character-position.
@@ -370,14 +378,30 @@
      (define-values (left-index right-index) (partition-mark-index mark-index offset))
      (define left-strand (substrand t 0 offset))
      (define right-strand (substrand t offset))
-     (values (if (and (strand-empty? left-strand) (hash-empty? left-index))
-                 rl
-                 (reindex
-                  (rope left-strand rl (empty-rope) 'will-be-recomputed (seteq) left-index)))
-             (if (and (strand-empty? right-strand) (hash-empty? right-index))
-                 rr
-                 (reindex
-                  (rope right-strand (empty-rope) rr 'will-be-recomputed (seteq) right-index))))]))
+     (define (left)
+       (if (and (strand-empty? left-strand) (hash-empty? left-index))
+           rl
+           (reindex
+            (rope left-strand rl (empty-rope) 'will-be-recomputed (seteq) left-index))))
+     (define (right)
+       (if (and (strand-empty? right-strand) (hash-empty? right-index))
+           rr
+           (reindex
+            (rope right-strand (empty-rope) rr 'will-be-recomputed (seteq) right-index))))
+     (cond
+      [(= position lo)
+       ;; We have to take care to move over any right-sticky marks
+       ;; in rl that happen to be at position.
+       (let-values (((rll rlr) (rope-split rl position)))
+         (values (merge-rope-mark-index rll left-index (if rll (strand-count (rope-strand rll)) 0))
+                 (rope-append rlr (right))))]
+      ;; [(= position hi)
+      ;;  ;; Likewise, for left-sticky marks.
+      ;;  (let-values (((rrl rrr) (rope-split rr 0)))
+      ;;    (values (rope-append (left) rrl)
+      ;;            (merge-rope-mark-index rrr right-index 0)))]
+      [else
+       (values (left) (right))])]))
 
 (define (partition-mark-index index offset)
   (for*/fold [(l (hasheq)) (r (hasheq))]
@@ -414,6 +438,12 @@
              [((mtype posvals) (in-hash ri))
               ((pos val) (in-hash posvals))]
     (add-mark-to-table i mtype (+ pos offset) val)))
+
+(define (merge-rope-mark-index r index offset)
+  (reindex
+   (if (rope-empty? r)
+       (rope (empty-strand) (empty-rope) (empty-rope) 'will-be-recomputed 'will-be-recomputed index)
+       (struct-copy rope r [mark-index (merge-mark-indexes (rope-mark-index r) index offset)]))))
 
 (define (subrope r0 [lo0 #f] [hi0 #f])
   (define lo (compute-range-index lo0 0 (rope-size r0)))
@@ -472,11 +502,12 @@
                               (for/fold [(h (hasheq))] [(e ms)]
                                 (match-define (list mtype pos val) e)
                                 (add-mark-to-table h mtype pos val))))))
-          (m1 (list (list mtype1 1 #t) (list mtype2 3 #t))))
+          (m1 (list (list mtype1 0 #t) (list mtype1 1 #t) (list mtype2 3 #t))))
       ;;  a b c d e f g h i j k l m n o p q r s t u
       ;; 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 2 2
       ;; 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
       ;;   *   + *   + *   + *   + *   + *   + *   +
+      ;; *     *     *     *     *     *     *
       ;;
       (r "jkl"
          m1
@@ -490,11 +521,11 @@
             (r "stu" m1 (empty-rope) (empty-rope))))))
 
   (check-equal? (find-all-marks/type demo-rope mtype1)
-                (for/hash ((i '(1 4 7 10 13 16 19))) (values i #t)))
+                (for/hash ((i '(0 1 3 4 6 7 9 10 12 13 15 16 18 19))) (values i #t)))
   (check-equal? (find-all-marks/type demo-rope mtype2)
                 (for/hash ((i '(3 6 9 12 15 18 21))) (values i #t)))
 
-  (let ((is '(1 4 7 10 13 16 19)))
+  (let ((is '(0 1 3 4 6 7 9 10 12 13 15 16 18 19)))
     (for ((i is))
       (check-equal? (find-all-marks/type (clear-mark demo-rope mtype1 i) mtype1)
                     (for/hash ((j (remove i is))) (values j #t)))))
@@ -503,6 +534,17 @@
     (for ((i is))
       (check-equal? (find-all-marks/type (clear-mark demo-rope mtype2 i) mtype2)
                     (for/hash ((j (remove i is))) (values j #t)))))
+
+  (let-values (((l r) (rope-split demo-rope 3)))
+    (check-equal? (find-all-marks/type l mtype2) (hash))
+    (check-equal? (find-all-marks/type r mtype2)
+                  (for/hash ((i '(0 3 6 9 12 15 18))) (values i #t))))
+
+  (let-values (((l r) (rope-split demo-rope 3)))
+    (check-equal? (find-all-marks/type l mtype1)
+                  (for/hash ((i '(0 1 3))) (values i #t)))
+    (check-equal? (find-all-marks/type r mtype1)
+                  (for/hash ((i '(1 3 4 6 7 9 10 12 13 15 16))) (values i #t))))
 
   (define (test-with-pieces string-pieces)
     (define rope-pieces (map string->rope string-pieces))
