@@ -8,6 +8,10 @@
 (require "rope.rkt")
 (require "window.rkt")
 (require "minibuf.rkt")
+(require "local.rkt")
+(require "ring.rkt")
+
+(require "circular-list.rkt")
 
 (provide (all-from-out "mode.rkt"
                        "editor.rkt"
@@ -15,4 +19,8 @@
                        "keys.rkt"
                        "rope.rkt"
                        "window.rkt"
-                       "minibuf.rkt"))
+                       "minibuf.rkt"
+                       "local.rkt"
+                       "ring.rkt"
+
+                       "circular-list.rkt"))

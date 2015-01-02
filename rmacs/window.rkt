@@ -6,6 +6,7 @@
          window-editor
          window-command
          window-move-to!
+         position-visible?
          )
 
 (require racket/match)
@@ -15,6 +16,7 @@
 
 (struct window (id ;; Symbol
                 top ;; MarkType
+                bottom ;; MarkType
                 point ;; MarkType
                 [buffer #:mutable] ;; (Option Buffer)
                 [status-line? #:mutable] ;; Boolean
@@ -24,6 +26,7 @@
   (define id (gensym 'window))
   (define w (window id
                     (mark-type (buffer-mark-type 'top id #f) 'left)
+                    (mark-type (buffer-mark-type 'bottom id #f) 'left)
                     (mark-type (buffer-mark-type 'point id #t) 'right)
                     #f
                     #t))
@@ -38,6 +41,7 @@
   (define old (window-buffer win))
   (when old
     (buffer-clear-mark! old (window-top win))
+    (buffer-clear-mark! old (window-bottom win))
     (buffer-clear-mark! old (window-point win)))
   (set-window-buffer! win new)
   (when new
@@ -57,3 +61,11 @@
 (define (window-move-to! win pos)
   (buffer-mark! (window-buffer win) (window-point win) pos)
   win)
+
+;; NOTE: relies on the frame being accurate, so it is not valid to
+;; rely on the results of this call if any change has been made to the
+;; buffer since the last re-framing (i.e. usually the last redisplay).
+(define (position-visible? win pos)
+  (define t (buffer-mark-pos* (window-buffer win) (window-top win)))
+  (define b (buffer-mark-pos* (window-buffer win) (window-bottom win)))
+  (and t b (<= t pos b)))

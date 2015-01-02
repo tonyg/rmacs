@@ -33,17 +33,19 @@
   #:bind-key "C-j"
   (buffer-insert! buf (window-point win) (string->rope "\n")))
 
+(define (plus-n-lines buf pos count)
+  (for/fold [(pos pos)] [(i count)] (+ (buffer-end-of-line buf pos) 1)))
+
+(define (minus-n-lines buf pos count)
+  (for/fold [(pos pos)] [(i count)] (- (buffer-start-of-line buf pos) 1)))
+
 (define (move-forward-n-lines win count)
   (define buf (window-buffer win))
-  (for ((i count))
-    (buffer-move-mark-to-end-of-line! buf (window-point win))
-    (buffer-move-mark! buf (window-point win) 1)))
+  (buffer-mark! buf (window-point win) (plus-n-lines buf (window-point win) count)))
 
 (define (move-backward-n-lines win count)
   (define buf (window-buffer win))
-  (for ((i count))
-    (buffer-move-mark-to-start-of-line! buf (window-point win))
-    (buffer-move-mark! buf (window-point win) -1)))
+  (buffer-mark! buf (window-point win) (minus-n-lines buf (window-point win) count)))
 
 (define (move-to-column win col)
   (define buf (window-buffer win))
@@ -92,19 +94,22 @@
   (when (positive? count) (move-forward-n-lines win (- count 1)))
   (buffer-move-mark-to-end-of-line! buf (window-point win)))
 
-(define-command fundamental-mode (move-beginning-of-line #:buffer buf #:window win #:prefix-arg [count 1])
+(define-command fundamental-mode
+  (move-beginning-of-line #:buffer buf #:window win #:prefix-arg [count 1])
   #:bind-key "C-a"
   #:bind-key "<home>"
   (when (positive? count) (move-forward-n-lines win (- count 1)))
   (buffer-move-mark-to-start-of-line! buf (window-point win)))
 
-(define-command fundamental-mode (delete-backward-char #:buffer buf #:window win #:prefix-arg [count 1])
+(define-command fundamental-mode
+  (delete-backward-char #:buffer buf #:window win #:prefix-arg [count 1])
   #:bind-key "<backspace>"
   #:bind-key "C-h" ;; differs from GNU emacs
   (define pos (buffer-mark-pos buf (window-point win)))
   (buffer-region-update! buf (- pos 1) pos (lambda (_deleted) (empty-rope))))
 
-(define-command fundamental-mode (delete-forward-char #:buffer buf #:window win #:prefix-arg [count 1])
+(define-command fundamental-mode
+  (delete-forward-char #:buffer buf #:window win #:prefix-arg [count 1])
   #:bind-key "<delete>"
   #:bind-key "C-d"
   (define pos (buffer-mark-pos buf (window-point win)))
@@ -115,7 +120,8 @@
   (when noisy? (message (window-editor win) "Mark set"))
   pos)
 
-(define-command fundamental-mode (beginning-of-buffer #:buffer buf #:window win #:prefix-arg [tenths 0])
+(define-command fundamental-mode
+  (beginning-of-buffer #:buffer buf #:window win #:prefix-arg [tenths 0])
   #:bind-key "M-<"
   #:bind-key "C-<home>"
   #:bind-key "<begin>"
@@ -166,13 +172,15 @@
 
 (define-command fundamental-mode (execute-extended-command #:buffer buf #:command cmd #:editor ed)
   #:bind-key "M-x"
+  (define last-cmd (editor-last-command ed))
   (completing-read ed "M-x "
                    (simple-completion (modeset-command-selectors (buffer-modeset buf)))
                    #:on-accept (lambda (content)
                                  (define selector (string->symbol content))
-                                 (invoke (copy-command cmd
-                                                       #:selector (string->symbol content)
-                                                       #:keyseq #f)))))
+                                 (set-editor-last-command! ed last-cmd)
+                                 (invoke/history (copy-command cmd
+                                                               #:selector (string->symbol content)
+                                                               #:keyseq #f)))))
 
 (define-command fundamental-mode (switch-to-buffer #:buffer buf #:window win #:editor ed)
   #:bind-key "C-x b"
@@ -188,3 +196,100 @@
                                  (define title (if (equal? title1 "") #f title1))
                                  (define target (if title (find-buffer ed title) default-target))
                                  (set-window-buffer! win target))))
+
+(define-editor-local kill-ring*)
+(define-command-local kill-command?)
+
+(define (kill-ring editor)
+  (when (not (kill-ring* editor))
+    (kill-ring* editor (make-ring)))
+  (kill-ring* editor))
+
+(define (copy-region-as-kill! cmd ed region)
+  (define full-region (if (kill-command? (editor-last-command ed))
+                          (rope-append (ring-unpush! (kill-ring ed)) region)
+                          region))
+  (ring-push! (kill-ring ed) (clear-all-marks full-region))
+  (kill-command? cmd #t)
+  region)
+
+(define (kill-region! cmd ed buf pm1 pm2)
+  (buffer-region-update! buf pm1 pm2 (lambda (region)
+                                       (copy-region-as-kill! cmd ed region)
+                                       (empty-rope))))
+
+(define (yank! ed buf pm #:index [index 0])
+  (define region (ring-peek (kill-ring ed) index))
+  (buffer-insert! buf pm region))
+
+(define (mark-pos-or-die buf)
+  (or (buffer-mark-pos* buf region-mark)
+      (abort "The mark is not set now, so there is no region")))
+
+(define-command fundamental-mode (kill-region #:buffer buf #:window win #:editor ed #:command cmd)
+  #:bind-key "C-w"
+  #:bind-key "S-<delete>"
+  (kill-region! cmd ed buf (window-point win) (mark-pos-or-die buf)))
+
+(define-command fundamental-mode (yank #:buffer buf #:window win #:editor ed)
+  #:bind-key "C-y"
+  #:bind-key "S-<insert>"
+  (set-mark! win)
+  (yank! ed buf (window-point win)))
+
+(define-command fundamental-mode (yank-pop #:buffer buf #:window win #:editor ed)
+  #:bind-key "M-y"
+  (if (editor-last-command? ed 'yank 'yank-pop)
+      (buffer-region-update! buf (window-point win) (mark-pos-or-die buf)
+                             (lambda (previously-yanked-region)
+                               (ring-pop! (kill-ring ed) 1)))
+      (abort "Previous command was not a yank")))
+
+(define-command fundamental-mode (append-next-kill #:command cmd #:editor ed)
+  #:bind-key "C-M-w"
+  (message ed "If the next command is a kill, it will append")
+  (kill-command? cmd #t))
+
+(define-command fundamental-mode
+  (copy-region-as-kill #:buffer buf #:window win #:editor ed #:command cmd)
+  (copy-region-as-kill! cmd ed (buffer-region buf (window-point win) (mark-pos-or-die buf))))
+
+(define (temporarily-move-cursor-to ed win buf pos)
+  (define point (buffer-mark-pos buf (window-point win)))
+  (buffer-mark! buf (window-point win) pos)
+  (editor-sit-for ed 1)
+  (buffer-mark! buf (window-point win) point))
+
+(define-command fundamental-mode
+  (kill-ring-save #:buffer buf #:window win #:editor ed #:command cmd)
+  #:bind-key "M-w"
+  #:bind-key "C-<insert>"
+  (define mark (mark-pos-or-die buf))
+  (define point (buffer-mark-pos buf (window-point win)))
+  (define region (copy-region-as-kill! cmd ed (buffer-region buf point mark)))
+  (if (position-visible? win mark)
+      (temporarily-move-cursor-to ed win buf mark)
+      (let-values (((lo hi) (if (< point mark)
+                                (values (- mark 40) mark)
+                                (values mark (+ mark 40)))))
+        (define snippet (rope->string (buffer-region buf lo hi)))
+        (message ed "Saved text ~a \"~a\"" (if (< point mark) "until" "from") snippet))))
+
+(define-command fundamental-mode
+  (kill-line #:buffer buf #:window win #:editor ed #:command cmd #:prefix-arg count)
+  #:bind-key "C-k"
+  (define point (buffer-mark-pos buf (window-point win)))
+  (define-values (start end)
+    (cond
+     [(eq? count '#:default)
+      (define eol (buffer-end-of-line buf (window-point win)))
+      (if (= point eol)
+          (values point (+ point 1))
+          (values point eol))]
+     [(positive? count)
+      (values (window-point win)
+              (buffer-end-of-line buf (plus-n-lines buf (window-point win) (- count 1))))]
+     [else
+      (values (buffer-start-of-line buf (minus-n-lines buf (window-point win) (- count)))
+              (window-point win))]))
+  (kill-region! cmd ed buf start end))

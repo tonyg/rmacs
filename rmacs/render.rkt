@@ -95,30 +95,32 @@
                 (buffer-string-column-count buf 0 line-to-cursor)))
         cursor-coordinates))
 
-  (define (render-top-spans spans line-count cursor-coordinates)
+  (define (render-top-spans spans line-count max-rendered-pos cursor-coordinates)
     (cond
-     [(>= line-count available-line-count) cursor-coordinates]
+     [(>= line-count available-line-count) (values max-rendered-pos cursor-coordinates)]
      [(null? spans)
       (define g (buffer-lines-forward/wrap buf (window-point win) basic-wrap window-width))
       (g) ;; discard first span, since it has already been covered
-      (render-bottom-spans g line-count cursor-coordinates)]
+      (render-bottom-spans g line-count max-rendered-pos cursor-coordinates)]
      [else
       (render-top-spans (cdr spans)
                         (+ line-count 1)
+                        (cdar spans)
                         (render-span (caar spans) (cdar spans) line-count cursor-coordinates))]))
 
-  (define (render-bottom-spans g line-count cursor-coordinates)
+  (define (render-bottom-spans g line-count max-rendered-pos cursor-coordinates)
     (if (>= line-count available-line-count)
-        cursor-coordinates
+        (values max-rendered-pos cursor-coordinates)
         (let-values (((sol-pos eol-pos) (g)))
           (if sol-pos
               (render-bottom-spans g
                                    (+ line-count 1)
+                                   eol-pos
                                    (render-span sol-pos eol-pos line-count cursor-coordinates))
               (begin (for ((i (- available-line-count line-count))) (tty-newline t))
-                     cursor-coordinates)))))
+                     (values max-rendered-pos cursor-coordinates))))))
 
-  (define cursor-coordinates (render-top-spans spans 0 #f))
+  (define-values (max-rendered-pos cursor-coordinates) (render-top-spans spans 0 #f #f))
 
   (when (window-status-line? win)
     (tty-statusline-style t is-active?)
@@ -127,6 +129,7 @@
       (tty-display t prefix)
       (when (positive? remaining-length) (tty-display t (make-string remaining-length #\-)))))
 
+  (buffer-mark! buf (window-bottom win) max-rendered-pos)
   cursor-coordinates)
 
 (define (layout-windows ws miniwin total-width total-height [minimum-height 4])

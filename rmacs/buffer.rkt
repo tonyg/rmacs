@@ -54,8 +54,8 @@
          buffer-replace-contents!
          buffer-search
          buffer-findf
-         buffer-local
          define-buffer-local
+         define-command-local
 
          (except-out (struct-out command) command)
          (struct-out exn:abort)
@@ -80,6 +80,7 @@
 (require "mode.rkt")
 (require "keys.rkt")
 (require "file.rkt")
+(require "local.rkt")
 
 (struct buffer-mark-type (kind ;; Symbol
                           window-id ;; (Option Symbol)
@@ -96,7 +97,7 @@
                 [modeset #:mutable] ;; ModeSet
                 [dirty? #:mutable] ;; Boolean
                 [source #:mutable] ;; (Option BufferSource)
-                [locals #:mutable] ;; (HashEqTable Symbol Any)
+                [locals #:mutable] ;; LocalsTable
                 ) #:prefab)
 
 (struct exn:abort exn (detail duration) #:transparent)
@@ -107,6 +108,7 @@
                  editor ;; Editor
                  keyseq ;; (Option Keyseq)
                  prefix-arg ;; Any
+                 [locals #:mutable] ;; LocalsTable
                  ) #:prefab)
 
 (define region-mark (mark-type (buffer-mark-type 'mark #f #f) 'left))
@@ -139,7 +141,7 @@
                                   kernel-modeset
                                   #f
                                   #f
-                                  (hasheq))))
+                                  (make-locals))))
 
 (define (register-buffer! group buf)
   (define old-group (buffer-group buf))
@@ -386,20 +388,11 @@
   (buffer-search* buf start-pos-or-mtype forward?
                   (lambda (piece) (findf-in-rope f piece #:forward? forward?))))
 
-(define (buffer-local name [default #f])
-  (case-lambda
-    [(buf)
-     (hash-ref (buffer-locals buf) name (lambda () default))]
-    [(buf val)
-     (set-buffer-locals! buf (if (equal? val default)
-                                 (hash-remove (buffer-locals buf) name)
-                                 (hash-set (buffer-locals buf) name val)))
-     val]))
+(define-local-definer define-buffer-local buffer-locals set-buffer-locals!)
 
-(define-syntax define-buffer-local
-  (syntax-rules ()
-    ((_ name) (define name (buffer-local 'name)))
-    ((_ name default) (define name (buffer-local 'name default)))))
+(define-local-definer define-command-local
+  (lambda (c) (if c (command-locals c) (make-locals)))
+  set-command-locals!)
 
 (define (buffer-lift f buf . args)
   (define new-rope (apply f (buffer-rope buf) args))
@@ -424,7 +417,7 @@
   (define buffer (cond
                   [(buffer? buffer-or-command) buffer-or-command]
                   [(command? buffer-or-command) (command-buffer buffer-or-command)]))
-  (command selector buffer window (or editor (buffer-editor buffer)) keyseq prefix-arg))
+  (command selector buffer window (or editor (buffer-editor buffer)) keyseq prefix-arg (make-locals)))
 
 (define (copy-command cmd
                       #:selector [selector (command-selector cmd)]
@@ -432,17 +425,19 @@
                       #:window [window (command-window cmd)]
                       #:editor [editor (command-editor cmd)]
                       #:keyseq [keyseq (command-keyseq cmd)]
-                      #:prefix-arg [prefix-arg (command-prefix-arg cmd)])
+                      #:prefix-arg [prefix-arg (command-prefix-arg cmd)]
+                      #:locals [locals (command-locals cmd)])
   (struct-copy command cmd
                [selector selector]
                [buffer buffer]
                [window window]
                [editor editor]
                [keyseq keyseq]
-               [prefix-arg prefix-arg]))
+               [prefix-arg prefix-arg]
+               [locals locals]))
 
 (define (invoke cmd)
-  (match-define (command selector buf _ _ keyseq _) cmd)
+  (match-define (command selector buf _ _ keyseq _ _) cmd)
   (define handler (modeset-lookup-command (buffer-modeset buf) selector))
   (when (not handler)
     (abort "Unhandled command ~a (key sequence: ~a)"
@@ -498,7 +493,8 @@
                                                           window
                                                           editor
                                                           keyseq
-                                                          prefix-arg) cmd)
+                                                          prefix-arg
+                                                          _) cmd)
                                    (let ((prefix-arg (match prefix-arg
                                                        ['#:default prefix-default]
                                                        ['#:universal prefix-universal]

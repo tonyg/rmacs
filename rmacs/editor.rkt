@@ -26,10 +26,12 @@
          editor-mainloop
          editor-request-shutdown!
          editor-force-redisplay!
+         editor-sit-for
          clear-message
          message
          start-recursive-edit
-         abandon-recursive-edit)
+         abandon-recursive-edit
+         define-editor-local)
 
 (require racket/match)
 
@@ -42,6 +44,7 @@
 (require "rope.rkt")
 (require "circular-list.rkt")
 (require "file.rkt")
+(require "local.rkt")
 
 (struct editor (buffers ;; BufferGroup
                 [tty #:mutable] ;; Tty
@@ -55,6 +58,7 @@
                 mini-window ;; Window
                 [message-expiry-time #:mutable] ;; (Option Number)
                 [recursive-edit #:mutable] ;; (Option Buffer)
+                [locals #:mutable] ;; LocalsTable
                 ) #:prefab)
 
 (define (make-editor #:tty [tty (stdin-tty)]
@@ -66,7 +70,20 @@
   (define w (make-window scratch))
   (define ws (list->circular-list (list (list w (relative-size 1)))))
   (define miniwin (make-window echo-area))
-  (define e (editor g tty ws w #f default-modeset #f #f echo-area miniwin #f #f))
+  (define e (editor g ;; buffers
+                    tty ;; tty
+                    ws ;; windows
+                    w ;; active-window
+                    #f ;; running?
+                    default-modeset ;; default-modeset
+                    #f ;; layout
+                    #f ;; last-command
+                    echo-area ;; echo-area
+                    miniwin ;; mini-window
+                    #f ;; message-expiry-time
+                    #f ;; recursive-edit
+                    (make-locals) ;; locals
+                    ))
   (initialize-buffergroup! g e)
   (configure-fresh-buffer! e scratch)
   (window-move-to! w (buffer-size scratch))
@@ -218,9 +235,11 @@
                                  (message editor "~a" (exn-message e)
                                           #:duration (exn:abort-duration e))
                                  (void))])
-    (define result (invoke cmd))
-    (set-editor-last-command! editor cmd)
-    result))
+    (let ((old-last-command (editor-last-command editor)))
+      (define result (invoke cmd))
+      (when (eq? (editor-last-command editor) old-last-command)
+        (set-editor-last-command! editor cmd))
+      result)))
 
 (define (editor-last-command? editor . possible-selectors)
   (and (editor-last-command editor)
@@ -309,6 +328,15 @@
   (tty-reset (editor-tty editor))
   (invalidate-layout! editor))
 
+;; Answers #t if it waited the full length of time.
+(define (editor-sit-for editor seconds)
+  (define input-port (tty-input (editor-tty editor)))
+  (define input-available?
+    (or (sync/timeout 0 (handle-evt input-port (lambda (_) #t)))
+        (begin (render-editor! editor)
+               (sync/timeout seconds (handle-evt input-port (lambda (_) #t))))))
+  (not input-available?))
+
 (define (clear-message editor)
   (when (positive? (buffer-size (editor-echo-area editor)))
     (buffer-replace-contents! (editor-echo-area editor) (empty-rope))
@@ -359,6 +387,8 @@
     (set-editor-active-window! editor (car (circular-car (editor-windows editor)))))
   (update-window-entry editor miniwin (lambda (e) '()))
   (invalidate-layout! editor))
+
+(define-local-definer define-editor-local editor-locals set-editor-locals!)
 
 ;;---------------------------------------------------------------------------
 
