@@ -213,16 +213,21 @@
          [(< pos hi) (values 'here #t)]
          [else (values 'right (- pos hi))]))))
 
-;; (define (dump-mark-tree r)
-;;   (define (-> r)
+;; (define (dump-mark-tree r [offset 0])
+;;   (define (-> r offset)
 ;;     (if r
-;;         (list (set->list (rope-marks* r))
-;;               (hash->list (rope-mark-index r))
-;;               (-> (rope-left r))
-;;               (-> (rope-right r)))
-;;         '()))
+;;         (let-values (((lo hi) (rope-lo+hi r)))
+;;           (list (list 'marks* (set->list (rope-marks* r)))
+;;                 (list 'mark-index
+;;                       (for*/list (((k t) (in-hash (rope-mark-index r)))
+;;                                   ((p v) (in-hash t)))
+;;                         (list k (+ p offset lo) v)))
+;;                 (list 'bounds offset (+ offset lo) (+ offset hi) (+ offset (rope-size r)))
+;;                 (list 'left (-> (rope-left r) offset))
+;;                 (list 'right (-> (rope-right r) (+ offset hi)))))
+;;         'empty))
 ;;   (local-require racket/pretty)
-;;   (pretty-print (-> r) (current-error-port)))
+;;   (pretty-print (-> r offset) (current-error-port)))
 
 ;; Searches from pos (inclusive) in the direction indicated.
 ;; Pos points to a mark-position, not a character-position.
@@ -278,7 +283,7 @@
           (mark-union (walk (rope-left r))
                       (mark-union (hash-ref (rope-mark-index r) mtype (lambda () (hash)))
                                   (walk (rope-right r))
-                                  hi)
+                                  (- hi lo))
                       lo))
         (hash)))
   (walk r))
@@ -311,20 +316,22 @@
   (let walk ((r (splay-to-pos 'clear-mark
                               r0
                               position
-                              (lambda () (format " clearing mark ~a" mtype)))))
+                              (lambda () (format " clearing mark ~a" mtype))))
+             (offset 0))
     (if (not (has-mark? r mtype))
         r
-        (reindex
-         (struct-copy rope r
-                      [left (walk (rope-left r))]
-                      [right (walk (rope-right r))]
-                      [mark-index
-                       (let* ((old-marks (rope-mark-index r))
-                              (old-mark (hash-ref old-marks mtype (lambda () (hash)))))
-                         (define new-mark (hash-remove old-mark (- position (rope-lo r))))
-                         (if (hash-empty? new-mark)
-                             (hash-remove old-marks mtype)
-                             (hash-set old-marks mtype new-mark)))])))))
+        (let-values (((lo hi) (rope-lo+hi r)))
+          (reindex
+           (struct-copy rope r
+                        [left (walk (rope-left r) offset)]
+                        [right (walk (rope-right r) (+ offset hi))]
+                        [mark-index
+                         (let* ((old-marks (rope-mark-index r))
+                                (old-mark (hash-ref old-marks mtype (lambda () (hash)))))
+                           (define new-mark (hash-remove old-mark (- position offset (rope-lo r))))
+                           (if (hash-empty? new-mark)
+                               (hash-remove old-marks mtype)
+                               (hash-set old-marks mtype new-mark)))]))))))
 
 (define (replace-mark r0 mtype new-pos new-value)
   (define pos (find-mark-pos r0 mtype))
@@ -454,6 +461,48 @@
 
   (define mtype1 (mark-type "Mark1" 'left))
   (define mtype2 (mark-type "Mark2" 'right))
+
+  (define demo-rope
+    (let ((r (lambda (s ms L R)
+               (reindex (rope (strand s 0 (string-length s))
+                              L
+                              R
+                              'will-be-recomputed
+                              'will-be-recomputed
+                              (for/fold [(h (hasheq))] [(e ms)]
+                                (match-define (list mtype pos val) e)
+                                (add-mark-to-table h mtype pos val))))))
+          (m1 (list (list mtype1 1 #t) (list mtype2 3 #t))))
+      ;;  a b c d e f g h i j k l m n o p q r s t u
+      ;; 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 2 2
+      ;; 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      ;;   *   + *   + *   + *   + *   + *   + *   +
+      ;;
+      (r "jkl"
+         m1
+         (r "def"
+            m1
+            (r "abc" m1 (empty-rope) (empty-rope))
+            (r "ghi" m1 (empty-rope) (empty-rope)))
+         (r "pqr"
+            m1
+            (r "mno" m1 (empty-rope) (empty-rope))
+            (r "stu" m1 (empty-rope) (empty-rope))))))
+
+  (check-equal? (find-all-marks/type demo-rope mtype1)
+                (for/hash ((i '(1 4 7 10 13 16 19))) (values i #t)))
+  (check-equal? (find-all-marks/type demo-rope mtype2)
+                (for/hash ((i '(3 6 9 12 15 18 21))) (values i #t)))
+
+  (let ((is '(1 4 7 10 13 16 19)))
+    (for ((i is))
+      (check-equal? (find-all-marks/type (clear-mark demo-rope mtype1 i) mtype1)
+                    (for/hash ((j (remove i is))) (values j #t)))))
+
+  (let ((is '(3 6 9 12 15 18 21)))
+    (for ((i is))
+      (check-equal? (find-all-marks/type (clear-mark demo-rope mtype2 i) mtype2)
+                    (for/hash ((j (remove i is))) (values j #t)))))
 
   (define (test-with-pieces string-pieces)
     (define rope-pieces (map string->rope string-pieces))
