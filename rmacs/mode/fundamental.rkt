@@ -33,6 +33,10 @@
   #:bind-key "C-j"
   (buffer-insert! buf (window-point win) (string->rope "\n")))
 
+(define-command fundamental-mode (indent-for-tab-command #:buffer buf #:window win)
+  #:bind-key "C-i"
+  (buffer-insert! buf (window-point win) (string->rope "\t")))
+
 (define (plus-n-lines buf pos count)
   (for/fold [(pos pos)] [(i count)] (+ (buffer-end-of-line buf pos) 1)))
 
