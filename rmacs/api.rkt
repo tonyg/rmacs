@@ -10,6 +10,7 @@
 (require "minibuf.rkt")
 (require "local.rkt")
 (require "ring.rkt")
+(require "history.rkt")
 
 (require "circular-list.rkt")
 
@@ -22,5 +23,6 @@
                        "minibuf.rkt"
                        "local.rkt"
                        "ring.rkt"
+                       "history.rkt"
 
                        "circular-list.rkt"))

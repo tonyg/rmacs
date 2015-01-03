@@ -184,7 +184,8 @@
                                  (set-editor-last-command! ed last-cmd)
                                  (invoke/history (copy-command cmd
                                                                #:selector (string->symbol content)
-                                                               #:keyseq #f)))))
+                                                               #:keyseq #f))
+                                 content)))
 
 (define-command fundamental-mode (switch-to-buffer #:buffer buf #:window win #:editor ed)
   #:bind-key "C-x b"
@@ -199,7 +200,8 @@
                                  (define title1 (string-trim title0))
                                  (define title (if (equal? title1 "") #f title1))
                                  (define target (if title (find-buffer ed title) default-target))
-                                 (set-window-buffer! win target))))
+                                 (set-window-buffer! win target)
+                                 (buffer-title target))))
 
 (define-editor-local kill-ring*)
 (define-command-local kill-command?)
@@ -298,3 +300,31 @@
       (values (buffer-start-of-line buf (minus-n-lines buf (window-point win) (- count)))
               (window-point win))]))
   (kill-region! cmd ed buf start end))
+
+(define (search-in-buffer ed win buf forward?)
+  (read-string-from-minibuffer
+   ed
+   (if forward? "Search: " "Search backward: ")
+   #:defaults (cond [(history-ref (minibuffer-history ed) 0) => list] [else '()])
+   #:on-accept (lambda (needle)
+                 (when (positive? (string-length needle))
+                   (define pos (buffer-search buf (window-point win) needle #:forward? forward?))
+                   (if (not pos)
+                       (message ed
+                                (if forward?
+                                    "Failing search: ~a"
+                                    "Failing search backward: ~a")
+                                needle)
+                       (let ((newpos (+ pos (if forward? (string-length needle) 0))))
+                         (set-mark! win #:noisy? #f)
+                         (message ed "Mark saved where search started")
+                         (buffer-mark! buf (window-point win) newpos)))
+                   needle))))
+
+(define-command fundamental-mode (search-forward #:buffer buf #:window win #:editor ed)
+  #:bind-key "C-s"
+  (search-in-buffer ed win buf #t))
+
+(define-command fundamental-mode (search-backward #:buffer buf #:window win #:editor ed)
+  #:bind-key "C-r"
+  (search-in-buffer ed win buf #f))

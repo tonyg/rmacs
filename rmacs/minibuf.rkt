@@ -104,8 +104,9 @@
   (when ((recursive-edit-acceptable-hook buf) result)
     (abandon-recursive-edit ed)
     (select-window ed (recursive-edit-selected-window buf))
-    (history-push! (recursive-edit-history buf) result)
-    ((recursive-edit-accept-hook buf) result)))
+    (define maybe-revised-result ((recursive-edit-accept-hook buf) result))
+    (when (string? maybe-revised-result)
+      (history-push! (recursive-edit-history buf) maybe-revised-result))))
 
 (define-command recursive-edit-mode (minibuf-beginning-of-line #:buffer buf #:window win)
   #:bind-key "C-a"
@@ -132,7 +133,6 @@
   (define new-pos (+ old-pos delta))
   (define lo-limit (- (length defaults)))
   (define hi-limit (history-length h))
-  (log-info "adjust-history-index! ~v ~v ~v" h old-pos new-pos)
   (when (< new-pos lo-limit)
     (if (zero? lo-limit)
         (abort "End of history; no default available")

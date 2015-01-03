@@ -24,7 +24,9 @@
   (length (history-items h)))
 
 (define (history-ref h index)
-  (list-ref (history-items h) index))
+  (and (>= index 0)
+       (< index (history-length h))
+       (list-ref (history-items h) index)))
 
 (define (history-push! h item)
   (define new-items
