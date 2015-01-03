@@ -396,10 +396,19 @@
   (buffer-search* buf start-pos-or-mtype #t
                   (lambda (piece)
                     (define p (open-input-rope piece #:name (buffer-title buf)))
-                    ;; TODO: this will likely go wrong in case of Unicode text in the buffer.
                     (match (regexp-match-positions pattern p)
                       [#f #f]
-                      [(cons (cons lo hi) _) (cons lo (- hi lo))]))))
+                      [(cons (cons lo hi) _)
+                       ;; regexp-match-positions gives BYTE offsets,
+                       ;; but we need CODEPOINT offsets. Reread,
+                       ;; count, and discard the portion of the buffer
+                       ;; leading up to the match.
+                       (define p (open-input-rope piece #:name (buffer-title buf)))
+                       (define prefix-len
+                         (string-length (bytes->string/utf-8 (read-bytes lo p))))
+                       (define match-len
+                         (string-length (bytes->string/utf-8 (read-bytes (- hi lo) p))))
+                       (cons prefix-len match-len)]))))
 
 (define-local-definer define-buffer-local buffer-locals set-buffer-locals!)
 

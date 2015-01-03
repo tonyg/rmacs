@@ -25,7 +25,3 @@ Plan:
 xsel for synchronising the clipboard?
 
 Figure out some sensible way to implement search-backward-regexp.
-
-Regexp search seems likely to go wrong in case of Unicode text in the
-buffer, because regexp-match-positions returns byte offsets, not
-character offsets.
