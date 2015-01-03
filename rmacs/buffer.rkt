@@ -54,6 +54,7 @@
          buffer-replace-contents!
          buffer-search
          buffer-findf
+         buffer-search-regexp
          define-buffer-local
          define-command-local
 
@@ -371,22 +372,34 @@
 (define (buffer-search* buf start-pos-or-mtype forward? find-delta)
   (define start-pos (->pos buf start-pos-or-mtype 'buffer-search*))
   (define-values (l r) (rope-split (buffer-rope buf) start-pos))
-  (define delta (find-delta (if forward? r l)))
-  (and delta
-       (let ((new-pos (clamp (+ start-pos (cond [(not delta) 0]
-                                                [forward? delta]
-                                                [else (- delta (rope-size l))]))
+  (define delta+len (find-delta (if forward? r l)))
+  (and delta+len
+       (let ((new-pos (clamp (+ start-pos (if forward?
+                                              (car delta+len)
+                                              (- (car delta+len) (rope-size l))))
                              buf)))
          (buffer-seek! buf new-pos)
-         new-pos)))
+         (cons new-pos (cdr delta+len)))))
 
 (define (buffer-search buf start-pos-or-mtype needle #:forward? [forward? #t])
   (buffer-search* buf start-pos-or-mtype forward?
-                  (lambda (piece) (search-rope needle piece #:forward? forward?))))
+                  (lambda (piece)
+                    (cons (search-rope needle piece #:forward? forward?)
+                          (string-length needle)))))
 
 (define (buffer-findf buf start-pos-or-mtype f #:forward? [forward? #t])
-  (buffer-search* buf start-pos-or-mtype forward?
-                  (lambda (piece) (findf-in-rope f piece #:forward? forward?))))
+  (car (buffer-search* buf start-pos-or-mtype forward?
+                       (lambda (piece)
+                         (cons (findf-in-rope f piece #:forward? forward?) 0)))))
+
+(define (buffer-search-regexp buf start-pos-or-mtype pattern)
+  (buffer-search* buf start-pos-or-mtype #t
+                  (lambda (piece)
+                    (define p (open-input-rope piece #:name (buffer-title buf)))
+                    ;; TODO: this will likely go wrong in case of Unicode text in the buffer.
+                    (match (regexp-match-positions pattern p)
+                      [#f #f]
+                      [(cons (cons lo hi) _) (cons lo (- hi lo))]))))
 
 (define-local-definer define-buffer-local buffer-locals set-buffer-locals!)
 

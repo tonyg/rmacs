@@ -301,21 +301,32 @@
               (window-point win))]))
   (kill-region! cmd ed buf start end))
 
-(define (search-in-buffer ed win buf forward?)
+(define (search-in-buffer ed win buf mode)
   (read-string-from-minibuffer
    ed
-   (if forward? "Search: " "Search backward: ")
+   (case mode
+     [(forward) "Search: "]
+     [(backward) "Search backward: "]
+     [(forward-regexp) "Regexp search: "])
    #:defaults (cond [(history-ref (minibuffer-history ed) 0) => list] [else '()])
    #:on-accept (lambda (needle)
                  (when (positive? (string-length needle))
-                   (define pos (buffer-search buf (window-point win) needle #:forward? forward?))
-                   (if (not pos)
+                   (define pos+len
+                     (case mode
+                       [(forward) (buffer-search buf (window-point win) needle #:forward? #t)]
+                       [(backward) (buffer-search buf (window-point win) needle #:forward? #f)]
+                       [(forward-regexp) (buffer-search-regexp buf (window-point win) needle)]))
+                   (if (not pos+len)
                        (message ed
-                                (if forward?
-                                    "Failing search: ~a"
-                                    "Failing search backward: ~a")
+                                (case mode
+                                  [(forward) "Failing search: ~a"]
+                                  [(backward) "Failing search backward: ~a"]
+                                  [(forward-regexp) "Failing regexp search: ~a"])
                                 needle)
-                       (let ((newpos (+ pos (if forward? (string-length needle) 0))))
+                       (let ((newpos (+ (car pos+len)
+                                        (case mode
+                                          [(forward forward-regexp) (cdr pos+len)]
+                                          [(backward) 0]))))
                          (set-mark! win #:noisy? #f)
                          (message ed "Mark saved where search started")
                          (buffer-mark! buf (window-point win) newpos)))
@@ -323,8 +334,12 @@
 
 (define-command fundamental-mode (search-forward #:buffer buf #:window win #:editor ed)
   #:bind-key "C-s"
-  (search-in-buffer ed win buf #t))
+  (search-in-buffer ed win buf 'forward))
 
 (define-command fundamental-mode (search-backward #:buffer buf #:window win #:editor ed)
   #:bind-key "C-r"
-  (search-in-buffer ed win buf #f))
+  (search-in-buffer ed win buf 'backward))
+
+(define-command fundamental-mode (search-forward-regexp #:buffer buf #:window win #:editor ed)
+  #:bind-key "C-M-s"
+  (search-in-buffer ed win buf 'forward-regexp))
