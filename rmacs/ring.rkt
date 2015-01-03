@@ -2,10 +2,10 @@
 
 (provide (struct-out ring)
          make-ring
-         ring-push!
-         ring-peek
-         ring-pop!
-         ring-unpush!
+         ring-ref
+         ring-rotate!
+         ring-add-item!
+         ring-remove-item!
          )
 
 (require racket/match)
@@ -16,23 +16,22 @@
               max-count
               ) #:prefab)
 
-(define (make-ring #:max-count [max-count 60])
-  (ring circular-empty max-count))
+(define (make-ring [items circular-empty] #:max-count [max-count 60])
+  (ring items max-count))
 
-(define (ring-push! ring item)
+(define (ring-ref ring [index 0])
+  (circular-list-ref (ring-items ring) index))
+
+(define (ring-rotate! ring [count 0])
+  (set-ring-items! ring (circular-list-rotate (ring-items ring) count)))
+
+(define (ring-add-item! ring item)
   (define items (circular-cons item (ring-items ring)))
   (set-ring-items! ring (if (> (circular-length items) (ring-max-count ring))
                             (circular-butlast items)
                             items)))
 
-(define (ring-peek ring [index 0])
-  (circular-list-ref (ring-items ring) index))
-
-(define (ring-pop! ring [index 0])
-  (set-ring-items! ring (circular-list-rotate (ring-items ring) index))
-  (ring-peek ring 0))
-
-(define (ring-unpush! ring)
+(define (ring-remove-item! ring)
   (match (ring-items ring)
     [(circular-cons item rest)
      (set-ring-items! ring rest)

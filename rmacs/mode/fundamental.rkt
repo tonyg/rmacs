@@ -211,9 +211,9 @@
 
 (define (copy-region-as-kill! cmd ed region)
   (define full-region (if (kill-command? (editor-last-command ed))
-                          (rope-append (ring-unpush! (kill-ring ed)) region)
+                          (rope-append (ring-remove-item! (kill-ring ed)) region)
                           region))
-  (ring-push! (kill-ring ed) (clear-all-marks full-region))
+  (ring-add-item! (kill-ring ed) (clear-all-marks full-region))
   (kill-command? cmd #t)
   region)
 
@@ -223,7 +223,7 @@
                                        (empty-rope))))
 
 (define (yank! ed buf pm #:index [index 0])
-  (define region (ring-peek (kill-ring ed) index))
+  (define region (ring-ref (kill-ring ed) index))
   (buffer-insert! buf pm region))
 
 (define (mark-pos-or-die buf)
@@ -246,7 +246,8 @@
   (if (editor-last-command? ed 'yank 'yank-pop)
       (buffer-region-update! buf (window-point win) (mark-pos-or-die buf)
                              (lambda (previously-yanked-region)
-                               (ring-pop! (kill-ring ed) 1)))
+                               (ring-rotate! (kill-ring ed) 1)
+                               (ring-ref (kill-ring ed))))
       (abort "Previous command was not a yank")))
 
 (define-command fundamental-mode (append-next-kill #:command cmd #:editor ed)
