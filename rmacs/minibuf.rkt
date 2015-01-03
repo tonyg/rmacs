@@ -1,16 +1,18 @@
 #lang racket/base
 
-(provide read-from-minibuffer
+(provide minibuffer-history
+         read-from-minibuffer
+         read-string-from-minibuffer
          recursive-edit-field-start
          recursive-edit-mode
          recursive-edit-accept-hook
          recursive-edit-cancel-hook
+         recursive-edit-acceptable-hook
          completing-read
          simple-completion
          completing-read-mode
          completing-read-string=?-hook
-         completing-read-completion-hook
-         completing-read-acceptable-hook)
+         completing-read-completion-hook)
 
 (require "buffer.rkt")
 (require "editor.rkt")
@@ -19,12 +21,17 @@
 (require "rope.rkt")
 (require "window.rkt")
 (require "strings.rkt")
+(require "history.rkt")
 
 ;;---------------------------------------------------------------------------
 
+(define-editor-local minibuffer-history (make-history))
+
 (define (read-from-minibuffer editor
                               prompt
-                              #:initial [initial ""]
+                              #:history [history (minibuffer-history editor)]
+                              #:defaults [defaults '()]
+                              #:acceptable? [acceptable? (lambda (v) #t)]
                               #:on-accept k-accept
                               #:on-cancel [k-cancel void])
   (define buf (make-buffer #f "*minibuf*"))
@@ -32,12 +39,34 @@
   (buffer-add-mode! buf recursive-edit-mode)
   (buffer-replace-contents! buf (string->rope prompt))
   (buffer-mark! buf recursive-edit-field-start (buffer-size buf))
-  (buffer-insert! buf (buffer-size buf) (string->rope initial))
   (recursive-edit-selected-window buf (editor-active-window editor))
+  (recursive-edit-history buf (or history (make-history))) ;; #f -> transient history
+  (recursive-edit-defaults buf defaults)
+  (recursive-edit-history-index buf 0)
+  (recursive-edit-new-input buf "")
   (recursive-edit-accept-hook buf k-accept)
   (recursive-edit-cancel-hook buf k-cancel)
+  (recursive-edit-acceptable-hook buf acceptable?)
   (start-recursive-edit editor buf)
   buf)
+
+(define (read-string-from-minibuffer editor
+                                     prompt
+                                     #:history [history (minibuffer-history editor)]
+                                     #:defaults [defaults '()]
+                                     #:acceptable? [acceptable? (lambda (v) #t)]
+                                     #:on-accept k-accept
+                                     #:on-cancel [k-cancel void])
+  (read-from-minibuffer editor
+                        prompt
+                        #:history history
+                        #:defaults defaults
+                        #:acceptable? acceptable?
+                        #:on-accept (lambda (result)
+                                      (if (and (pair? defaults) (string=? result ""))
+                                          (k-accept (car defaults))
+                                          (k-accept result)))
+                        #:on-cancel k-cancel))
 
 (define recursive-edit-field-start (mark-type (buffer-mark-type 'recursive-edit-field-start
                                                                 '*minibuf*
@@ -47,8 +76,13 @@
 (define recursive-edit-mode (make-mode "recursive-edit"))
 
 (define-buffer-local recursive-edit-selected-window)
+(define-buffer-local recursive-edit-history)
+(define-buffer-local recursive-edit-defaults '())
+(define-buffer-local recursive-edit-history-index 0)
+(define-buffer-local recursive-edit-new-input "")
 (define-buffer-local recursive-edit-accept-hook (lambda (content) (void)))
 (define-buffer-local recursive-edit-cancel-hook (lambda () (void)))
+(define-buffer-local recursive-edit-acceptable-hook (lambda (v) #t))
 
 (define-command recursive-edit-mode (abort-recursive-edit #:buffer buf #:editor ed)
   #:bind-key "C-g"
@@ -59,12 +93,19 @@
 (define (recursive-edit-contents buf)
   (rope->string (buffer-region buf recursive-edit-field-start (buffer-size buf))))
 
+(define (set-recursive-edit-contents! buf str)
+  (buffer-region-update! buf recursive-edit-field-start (buffer-size buf)
+                         (lambda (_old) (string->rope str))))
+
 (define-command recursive-edit-mode (exit-minibuffer #:buffer buf #:editor ed)
   #:bind-key "C-m"
   #:bind-key "C-j"
-  (abandon-recursive-edit ed)
-  (select-window ed (recursive-edit-selected-window buf))
-  ((recursive-edit-accept-hook buf) (recursive-edit-contents buf)))
+  (define result (recursive-edit-contents buf))
+  (when ((recursive-edit-acceptable-hook buf) result)
+    (abandon-recursive-edit ed)
+    (select-window ed (recursive-edit-selected-window buf))
+    (history-push! (recursive-edit-history buf) result)
+    ((recursive-edit-accept-hook buf) result)))
 
 (define-command recursive-edit-mode (minibuf-beginning-of-line #:buffer buf #:window win)
   #:bind-key "C-a"
@@ -74,24 +115,59 @@
       (window-move-to! win limit)
       (buffer-move-mark-to-start-of-line! buf (window-point win))))
 
+(define-command recursive-edit-mode
+  (next-history-element #:buffer buf #:window win #:editor ed)
+  #:bind-key "M-n"
+  (adjust-history-index! ed win buf -1))
+
+(define-command recursive-edit-mode
+  (previous-history-element #:buffer buf #:window win #:editor ed)
+  #:bind-key "M-p"
+  (adjust-history-index! ed win buf 1))
+
+(define (adjust-history-index! ed win buf delta)
+  (define defaults (recursive-edit-defaults buf))
+  (define h (recursive-edit-history buf))
+  (define old-pos (recursive-edit-history-index buf))
+  (define new-pos (+ old-pos delta))
+  (define lo-limit (- (length defaults)))
+  (define hi-limit (history-length h))
+  (log-info "adjust-history-index! ~v ~v ~v" h old-pos new-pos)
+  (when (< new-pos lo-limit)
+    (if (zero? lo-limit)
+        (abort "End of history; no default available")
+        (abort "End of defaults; no next item")))
+  (when (> new-pos hi-limit)
+    (abort "Beginning of history; no preceding item"))
+  (when (zero? old-pos)
+    (recursive-edit-new-input buf (recursive-edit-contents buf)))
+  (recursive-edit-history-index buf new-pos)
+  (set-recursive-edit-contents!
+   buf
+   (cond [(positive? new-pos) (history-ref h (- new-pos 1))]
+         [(zero? new-pos) (recursive-edit-new-input buf)]
+         [(negative? new-pos) (list-ref defaults (- (- new-pos) 1))])))
+
 ;;---------------------------------------------------------------------------
 
 (define (completing-read editor
                          prompt
                          completion-fn
                          #:string=? [string=? string=?]
-                         #:initial [initial ""]
+                         #:history [history (minibuffer-history editor)]
+                         #:defaults [defaults '()]
                          #:acceptable? [acceptable? (lambda (v) #t)]
                          #:on-accept k-accept
                          #:on-cancel [k-cancel void])
   (define buf (read-from-minibuffer editor prompt
-                                    #:initial initial
+                                    #:history history
+                                    #:defaults defaults
+                                    #:acceptable? acceptable?
                                     #:on-accept k-accept
                                     #:on-cancel k-cancel))
   (buffer-add-mode! buf completing-read-mode)
   (completing-read-string=?-hook buf string=?)
   (completing-read-completion-hook buf completion-fn)
-  (completing-read-acceptable-hook buf acceptable?)
   buf)
 
 (define (simple-completion collection)
@@ -105,8 +181,6 @@
   string=?)
 (define-buffer-local completing-read-completion-hook
   (lambda (v) (abort "completing-read-completion-hook not set")))
-(define-buffer-local completing-read-acceptable-hook
-  (lambda (v) #t))
 
 (define (common-string-prefix strs string=?)
   (if (null? (cdr strs))
@@ -143,10 +217,3 @@
                                    (lambda (_old)
                                      (string->rope common-prefix)))))
       (message ed "No match")))
-
-(define-command completing-read-mode (exit-minibuffer #:buffer buf
-                                                      #:next-method next-method
-                                                      #:command cmd
-                                                      #:editor ed)
-  (when ((completing-read-acceptable-hook buf) (recursive-edit-contents buf))
-    (next-method cmd)))
