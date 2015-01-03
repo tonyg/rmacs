@@ -2,3 +2,30 @@ Make it reloadable
 
 Catch and handle SIGWINCH.
 See http://man7.org/tlpi/code/online/dist/tty/demo_SIGWINCH.c.html
+
+dabbrev-expand!
+
+page up / page down, motion word-by-word, motion sexp-by-sexp
+
+racket-mode
+
+mutability marks and checks during edits, motion
+
+a global mark and point per buffer, updated when window-specific mark
+and point are updated, used to initialise window mark and point when a
+buffer is shown in a window
+
+give commands positional arguments with argument value collectors
+apply this to the `unhandled-command` code in `invoke`
+
+Plan:
+ - visit-file command
+ - list-buffers command
+
+xsel for synchronising the clipboard?
+
+Figure out some sensible way to implement search-backward-regexp.
+
+Regexp search seems likely to go wrong in case of Unicode text in the
+buffer, because regexp-match-positions returns byte offsets, not
+character offsets.
