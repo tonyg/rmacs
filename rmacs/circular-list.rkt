@@ -11,6 +11,8 @@
          circular-last
          circular-butlast
          circular-length
+         circular-reverse
+         circular-append
          circular-list-ref
          circular-list-rotate
          circular-list-rotate-forward
@@ -102,6 +104,16 @@
 (define (circular-length xs)
   (+ (length (circular-list-front xs))
      (length (circular-list-back xs))))
+
+(define (circular-reverse xs)
+  (circular-list (circular-list-back xs)
+                 (circular-list-front xs)))
+
+(define (circular-append xs ys)
+  (circular-list (circular-list-front xs)
+                 (append (circular-list-back ys)
+                         (reverse (circular-list-front ys))
+                         (circular-list-back xs))))
 
 (define (circular-list-ref xs index0)
   (define fl (length (circular-list-front xs)))
@@ -293,4 +305,11 @@
 
   (check-equal? (circular-list-rotate (circular-list '() '(c b a f e d)) 1)
                 (circular-list '(e f a b c) '(d)))
+
+  (check-equal? (circular-list->list (circular-reverse (circular-list '(a b c) '(f e d))))
+                '(f e d c b a))
+  (check-equal? (circular-list->list
+                 (circular-append (circular-list '(a b c) '(f e d))
+                                  (circular-list '(g h i) '(l k j))))
+                '(a b c d e f g h i j k l))
   )
