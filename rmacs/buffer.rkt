@@ -65,7 +65,6 @@
          (rename-out [make-command command])
          invoke
 
-         define-key
          define-command)
 
 (require racket/match)
@@ -103,7 +102,8 @@
 
 (struct exn:abort exn (detail duration) #:transparent)
 
-(struct command (selector ;; Symbol
+(struct command (command-signature ;; CommandSignature
+                 args ;; (Option (Listof Any))
                  buffer ;; Buffer
                  window ;; (Option Window)
                  editor ;; Editor
@@ -432,7 +432,8 @@
                     detail
                     duration)))
 
-(define (make-command selector buffer-or-command
+(define (make-command signature buffer-or-command
+                      #:args args
                       #:window [window #f]
                       #:editor [editor #f]
                       #:keyseq [keyseq #f]
@@ -440,10 +441,18 @@
   (define buffer (cond
                   [(buffer? buffer-or-command) buffer-or-command]
                   [(command? buffer-or-command) (command-buffer buffer-or-command)]))
-  (command selector buffer window (or editor (buffer-editor buffer)) keyseq prefix-arg (make-locals)))
+  (command signature
+           args
+           buffer
+           window
+           (or editor (buffer-editor buffer))
+           keyseq
+           prefix-arg
+           (make-locals)))
 
 (define (copy-command cmd
-                      #:selector [selector (command-selector cmd)]
+                      #:args [args (command-args cmd)]
+                      #:signature [signature (command-command-signature cmd)]
                       #:buffer [buffer (command-buffer cmd)]
                       #:window [window (command-window cmd)]
                       #:editor [editor (command-editor cmd)]
@@ -451,7 +460,8 @@
                       #:prefix-arg [prefix-arg (command-prefix-arg cmd)]
                       #:locals [locals (command-locals cmd)])
   (struct-copy command cmd
-               [selector selector]
+               [command-signature signature]
+               [args args]
                [buffer buffer]
                [window window]
                [editor editor]
@@ -459,59 +469,72 @@
                [prefix-arg prefix-arg]
                [locals locals]))
 
-(define (invoke cmd)
-  (match-define (command selector buf _ _ keyseq _ _) cmd)
-  (define handler (modeset-lookup-command (buffer-modeset buf) selector))
-  (when (not handler)
+(define (invoke cmd #:error-if-unhandled? [error-if-unhandled? #t])
+  (match-define (command signature _ buf _ _ keyseq _ _) cmd)
+  (define handler (modeset-lookup-command (buffer-modeset buf) signature))
+  (cond
+   [handler (handler cmd)]
+   [error-if-unhandled?
     (abort "Unhandled command ~a (key sequence: ~a)"
-           selector
-           (if keyseq (keyseq->keyspec keyseq) "N/A")))
-  (handler cmd))
-
-(define-syntax-rule (define-key mode-exp keyspec-exp command-symbol)
-  (void (mode-keymap-bind! mode-exp keyspec-exp 'command-symbol)))
+           (command-signature->list signature)
+           (if keyseq (keyseq->keyspec keyseq) "N/A"))]
+   [else (void)]))
 
 (define-syntax define-command
   (lambda (stx)
     (syntax-parse stx
-      [(_ mode-exp
-          (selector (~or (~optional (~seq #:next-method next-method)
-                                    #:defaults ([next-method #'nm])
-                                    #:name "#:next-method")
-                         (~optional (~seq #:command cmd)
-                                    #:defaults ([cmd #'cmd])
-                                    #:name "#:command")
-                         (~optional (~seq #:selector self-selector)
-                                    #:defaults ([self-selector #'self])
-                                    #:name "#:selector")
-                         (~optional (~seq #:buffer buffer)
-                                    #:defaults ([buffer #'buf])
-                                    #:name "#:buffer")
-                         (~optional (~seq #:window window)
-                                    #:defaults ([window #'win])
-                                    #:name "#:window")
-                         (~optional (~seq #:editor editor)
-                                    #:defaults ([editor #'ed])
-                                    #:name "#:editor")
-                         (~optional (~seq #:keyseq keyseq)
-                                    #:defaults ([keyseq #'keyseq])
-                                    #:name "#:keyseq")
-                         (~optional (~seq #:prefix-arg
-                                          (~or (~seq [prefix-arg prefix-default prefix-universal])
-                                               (~seq [prefix-arg prefix-default])
-                                               prefix-arg))
-                                    #:defaults ([prefix-arg #'pa]
-                                                [prefix-default #''#:default]
-                                                [prefix-universal #''#:universal])
-                                    #:name "#:prefix-arg"))
-                    ...)
+      [(_ mode-exp sig-exp
+          ((~or (~optional (~seq #:next-method next-method)
+                           #:defaults ([next-method #'nm])
+                           #:name "#:next-method")
+                (~optional (~seq #:command cmd)
+                           #:defaults ([cmd #'cmd])
+                           #:name "#:command")
+                (~optional (~seq #:selector self-selector)
+                           #:defaults ([self-selector #'self])
+                           #:name "#:selector")
+                (~optional (~seq #:args args)
+                           #:defaults ([args #'args])
+                           #:name "#:args")
+                (~optional (~seq #:buffer buffer)
+                           #:defaults ([buffer #'buf])
+                           #:name "#:buffer")
+                (~optional (~seq #:window window)
+                           #:defaults ([window #'win])
+                           #:name "#:window")
+                (~optional (~seq #:editor editor)
+                           #:defaults ([editor #'ed])
+                           #:name "#:editor")
+                (~optional (~seq #:keyseq keyseq)
+                           #:defaults ([keyseq #'keyseq])
+                           #:name "#:keyseq")
+                (~optional (~seq #:prefix-arg
+                                 (~or (~seq [prefix-arg prefix-default prefix-universal])
+                                      (~seq [prefix-arg prefix-default])
+                                      prefix-arg))
+                           #:defaults ([prefix-arg #'pa]
+                                       [prefix-default #''#:default]
+                                       [prefix-universal #''#:universal])
+                           #:name "#:prefix-arg")
+                argname)
+           ...)
           (~seq #:bind-key bind-keyspec-exps) ...
           body ...)
-       #`(let ((mode mode-exp))
+       #`(let* ((mode mode-exp)
+                (sig sig-exp)
+                (argnames (list 'argname ...)))
+           (when (not (equal? argnames
+                              (map command-argument-spec-name (command-signature-args sig))))
+             (error 'define-command
+                    "Command handler for ~a in mode ~a expects args ~a"
+                    (command-signature->list sig)
+                    (mode-id mode)
+                    argnames))
            (mode-define-command! mode
-                                 'selector
+                                 sig
                                  (lambda (cmd next-method)
                                    (match-define (command self-selector
+                                                          (and args (list argname ...))
                                                           buffer
                                                           window
                                                           editor
@@ -524,5 +547,5 @@
                                                        [_ prefix-arg])))
                                      body ...)))
            #,@(for/list ((bind-keyspec-exp (syntax->list #'(bind-keyspec-exps ...))))
-                #`(mode-keymap-bind! mode #,bind-keyspec-exp 'selector))
+                #`(mode-keymap-bind! mode #,bind-keyspec-exp sig))
            (void))])))

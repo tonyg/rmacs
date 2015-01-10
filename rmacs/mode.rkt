@@ -6,6 +6,10 @@
          (struct-out incomplete-key-sequence)
          (struct-out unbound-key-sequence)
          (struct-out command-invocation)
+         (struct-out command-signature)
+         (struct-out command-argument-spec)
+
+         command-signature->list
 
          make-raw-mode
          make-mode
@@ -13,10 +17,13 @@
          mode-keymap-bind!
          mode-keymap-unbind!
          mode-keymap-rebind!
+         mode-define-signature!
+         mode-undefine-signature!
+         mode-lookup-signature
          mode-define-command!
          mode-undefine-command!
          mode-redefine-command!
-         mode-command-selectors
+         mode-command-signatures
 
          make-modeset
          modeset-add-mode
@@ -24,10 +31,20 @@
          modeset-toggle-mode
          modeset-keyseq-handler
          modeset-lookup-command
-         modeset-command-selectors
+         modeset-lookup-signature
+         modeset-command-signatures
+
+         define-command-signature
+         define-simple-command-signature
+         collect-args
+         const-arg
 
          kernel-mode
          kernel-modeset)
+
+(require (for-syntax syntax/parse))
+(require (for-syntax racket/base))
+(require (for-syntax "syntax.rkt"))
 
 (require racket/set)
 (require racket/match)
@@ -39,7 +56,8 @@
 (struct mode (id
               name
               [keymap #:mutable]
-              [commands #:mutable]
+              [signatures #:mutable] ;; (Hasheq Symbol Signature)
+              [commands #:mutable] ;; (Hasheq Signature Handler)
               dispatch-keys-before
               dispatch-keys-after
               interpret-commands-before
@@ -53,12 +71,32 @@
 
 (struct incomplete-key-sequence (handler) #:prefab)
 (struct unbound-key-sequence () #:prefab)
-(struct command-invocation (selector prefix-arg remaining-input) #:prefab)
+(struct command-invocation (signature prefix-arg remaining-input) #:prefab)
+
+;; A CommandCategory is one of
+;; -- 'interactive
+;; -- 'event
+
+(struct command-signature (selector ;; Symbol
+                           category ;; CommandCategory
+                           args ;; (List of Argspec)
+                           ) #:prefab)
+
+(struct command-argument-spec (name ;; Symbol
+                               value-proc
+                               ;; ^ CPS value-producing function:
+                               ;; (Editor Signature Symbol (-> Any1 Any2) -> Any3)
+                               ) #:prefab)
+
+(define (command-signature->list sig)
+  (cons (command-signature-selector sig)
+        (map command-argument-spec-name (command-signature-args sig))))
 
 (define (make-raw-mode name)
   (mode (gensym name)
         name
         (empty-keymap)
+        (hasheq)
         (hasheq)
         (seteq)
         (seteq)
@@ -100,23 +138,51 @@
 (define (mode-keymap-rebind! m keyspec command)
   (mode-keymap-bind! (mode-keymap-unbind! m keyspec) keyspec command))
 
-(define (mode-define-command! m selector handler)
-  (when (hash-has-key? (mode-commands m) selector)
-    (error 'mode-define-command!
-           "Duplicate command handler for ~a in mode ~a"
-           selector
+(define (mode-define-signature! m signature)
+  (define selector (command-signature-selector signature))
+  (let ((existing-sig (mode-lookup-signature m selector)))
+    (when (and existing-sig (not (eq? existing-sig signature)))
+      (error 'mode-define-signature!
+             "Cannot overwrite existing signature ~a with new signature ~a in mode ~a"
+             (command-signature->list existing-sig)
+             (command-signature->list signature)
+             (mode-id m))))
+  (set-mode-signatures! m (hash-set (mode-signatures m) selector signature))
+  m)
+
+(define (mode-undefine-signature! m signature)
+  (define selector (command-signature-selector signature))
+  (define existing-sig (mode-lookup-signature m selector))
+  (when (and existing-sig (not (eq? existing-sig signature)))
+    (error 'mode-undefine-signature!
+           "Attempt to remove signature ~a that conflicts with existing signature ~a in mode ~a"
+           (command-signature->list signature)
+           (command-signature->list existing-sig)
            (mode-id m)))
-  (set-mode-commands! m (hash-set (mode-commands m) selector handler))
+  (set-mode-signatures! m (hash-remove (mode-signatures m) selector))
   m)
 
-(define (mode-undefine-command! m selector)
-  (set-mode-commands! m (hash-remove (mode-commands m) selector))
+(define (mode-lookup-signature m selector)
+  (hash-ref (mode-signatures m) selector #f))
+
+(define (mode-define-command! m signature handler)
+  (mode-define-signature! m signature)
+  (when (hash-has-key? (mode-commands m) signature)
+    (error 'mode-define-command!
+           "Duplicate handler for command ~a in mode ~a"
+           (command-signature->list signature)
+           (mode-id m)))
+  (set-mode-commands! m (hash-set (mode-commands m) signature handler))
   m)
 
-(define (mode-redefine-command! m selector handler)
-  (mode-define-command! (mode-undefine-command! m selector) selector handler))
+(define (mode-undefine-command! m signature)
+  (set-mode-commands! m (hash-remove (mode-commands m) signature))
+  m)
 
-(define (mode-command-selectors m)
+(define (mode-redefine-command! m signature handler)
+  (mode-define-command! (mode-undefine-command! m signature) signature handler))
+
+(define (mode-command-signatures m)
   (list->seteq (hash-keys (mode-commands m))))
 
 (define (make-modeset)
@@ -185,26 +251,59 @@
              (if (null? remaining-input)
                  (incomplete-key-sequence result)
                  (result e remaining-input))]
-            [else (command-invocation result '#:default remaining-input)])])))))
+            [(command-signature? result)
+             (command-invocation result '#:default remaining-input)]
+            [else (error 'modeset-keyseq-handler "Invalid keymap-lookup result: ~v" result)])])))))
 
-(define (modeset-lookup-command ms selector)
+(define (modeset-lookup-command ms signature)
   (let search ((tables (map mode-commands
                             (order->modes ms modeset-command-interpretation-order))))
     (match tables
       ['() #f]
       [(cons table rest)
-       (define handler (hash-ref table selector #f))
-       (if handler
-           (lambda (cmd)
-             (handler cmd
-                      (lambda ([cmd cmd])
-                        (define next-method (search rest))
-                        (when next-method (next-method cmd)))))
-           (search rest))])))
+       (match (hash-ref table signature #f)
+         [#f (search rest)]
+         [handler (lambda (cmd)
+                    (handler cmd
+                             (lambda ([cmd cmd])
+                               (define next-method (search rest))
+                               (when next-method (next-method cmd)))))])])))
 
-(define (modeset-command-selectors ms)
-  (for/fold [(selectors (seteq))] [(m (hash-values (modeset-modes ms)))]
-    (set-union selectors (mode-command-selectors m))))
+(define (modeset-lookup-signature ms selector)
+  (for/or ((m (order->modes ms modeset-command-interpretation-order)))
+    (mode-lookup-signature m selector)))
+
+(define (modeset-command-signatures ms)
+  (for/fold [(signatures (seteq))] [(m (hash-values (modeset-modes ms)))]
+    (set-union signatures (mode-command-signatures m))))
+
+(define-syntax define-command-signature
+  (lambda (stx)
+    (syntax-parse stx
+      [(_ id (selector [argname argproc] ...)
+          (~optional (~seq #:category category) #:defaults ([category #'interactive])))
+       #'(define id (command-signature 'selector
+                                       'category
+                                       (list (command-argument-spec 'argname argproc) ...)))])))
+
+(define-syntax define-simple-command-signature
+  (lambda (stx)
+    (syntax-parse stx
+      [(_ (selector arg ...) other ...)
+       #`(define-command-signature #,(build-name #'selector "cmd:" #'selector)
+           (selector arg ...)
+           other ...)])))
+
+(define (collect-args sig editor k)
+  (let loop ((specs (command-signature-args sig)) (acc '()))
+    (match specs
+      ['()
+       (k (reverse acc))]
+      [(cons (command-argument-spec name value-proc) rest)
+       (value-proc editor sig name (lambda (v) (loop rest (cons v acc))))])))
+
+(define (const-arg v)
+  (lambda (ed sig name k) (k v)))
 
 (define kernel-mode
   (mode-add-constraints (make-raw-mode "kernel")

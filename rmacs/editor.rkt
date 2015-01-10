@@ -20,9 +20,11 @@
          editor-prev-window
          editor-command
          invoke/history
+         collect-args-and-invoke/history
          editor-last-command?
          editor-active-buffer
          editor-active-modeset
+         cmd:unbound-key-sequence
          editor-mainloop
          editor-request-shutdown!
          editor-force-redisplay!
@@ -221,10 +223,12 @@
                                                                   circular-list-rotate-backward)]
         [else #f]))
 
-(define (editor-command selector editor
+(define (editor-command signature editor
+                        #:args args
                         #:keyseq [keyseq #f]
                         #:prefix-arg [prefix-arg '#:default])
-  (window-command selector (editor-active-window editor)
+  (window-command signature (editor-active-window editor)
+                  #:args args
                   #:editor editor
                   #:keyseq keyseq
                   #:prefix-arg prefix-arg))
@@ -241,10 +245,17 @@
         (set-editor-last-command! editor cmd))
       result)))
 
-(define (editor-last-command? editor . possible-selectors)
+(define (collect-args-and-invoke/history editor sig keyseq prefix-arg)
+  (collect-args sig editor (lambda (args)
+                             (invoke/history (editor-command sig editor
+                                                             #:args args
+                                                             #:keyseq keyseq
+                                                             #:prefix-arg prefix-arg)))))
+
+(define (editor-last-command? editor . possible-signatures)
   (and (editor-last-command editor)
-       (for/or ((selector (in-list possible-selectors)))
-         (eq? (command-selector (editor-last-command editor)) selector))))
+       (for/or ((signature (in-list possible-signatures)))
+         (equal? (command-command-signature (editor-last-command editor)) signature))))
 
 (define (root-keyseq-handler editor)
   (modeset-keyseq-handler (editor-active-modeset editor)))
@@ -259,6 +270,8 @@
   (define b (find-buffer editor "*Error*"))
   (buffer-replace-contents! b (string->rope error-report))
   (open-window editor b))
+
+(define-simple-command-signature (unbound-key-sequence) #:category event)
 
 (define (editor-mainloop editor)
   (when (editor-running? editor) (error 'editor-mainloop "Nested mainloop"))
@@ -303,22 +316,22 @@
        [else
         (match (handler editor input)
           [(unbound-key-sequence)
-           (when (not (invoke/history (editor-command 'unbound-key-sequence editor
+           (when (not (invoke/history (editor-command cmd:unbound-key-sequence
+                                                      editor
+                                                      #:args '()
                                                       #:keyseq total-keyseq)))
              (message editor "Unbound key sequence: ~a" (keyseq->keyspec total-keyseq)))
            (loop '() '() (root-keyseq-handler editor) (request-repaint))]
           [(incomplete-key-sequence next-handler)
            (message #:log? #f editor "~a-" (keyseq->keyspec total-keyseq))
            (wait-for-input next-handler)]
-          [(command-invocation selector prefix-arg remaining-input)
+          [(command-invocation sig prefix-arg remaining-input)
            (define accepted-input
              (let remove-tail ((keyseq total-keyseq))
                (if (equal? keyseq remaining-input)
                    '()
                    (cons (car keyseq) (remove-tail (cdr keyseq))))))
-           (invoke/history (editor-command selector editor
-                                           #:keyseq accepted-input
-                                           #:prefix-arg prefix-arg))
+           (collect-args-and-invoke/history editor sig accepted-input prefix-arg)
            (loop '() remaining-input (root-keyseq-handler editor) (request-repaint))])]))))
 
 (define (editor-request-shutdown! editor)
@@ -392,19 +405,24 @@
 
 ;;---------------------------------------------------------------------------
 
-(define-command kernel-mode (save-buffers-kill-terminal #:editor ed)
+(define-simple-command-signature (save-buffers-kill-terminal))
+(define-simple-command-signature (force-redisplay))
+(define-simple-command-signature (keyboard-quit))
+(define-simple-command-signature (dump-buffer-to-stderr))
+
+(define-command kernel-mode cmd:save-buffers-kill-terminal (#:editor ed)
   #:bind-key "C-x C-c"
   (editor-request-shutdown! ed))
 
-(define-command kernel-mode (force-redisplay #:editor ed)
+(define-command kernel-mode cmd:force-redisplay (#:editor ed)
   #:bind-key "C-l"
   (editor-force-redisplay! ed))
 
-(define-command kernel-mode (keyboard-quit)
+(define-command kernel-mode cmd:keyboard-quit ()
   #:bind-key "C-g"
   (abort "Quit"))
 
-(define-command kernel-mode (dump-buffer-to-stderr #:buffer buf #:window win #:editor ed)
+(define-command kernel-mode cmd:dump-buffer-to-stderr (#:buffer buf #:window win #:editor ed)
   #:bind-key "C-M-x"
   (local-require racket/pretty)
   (log-info "")

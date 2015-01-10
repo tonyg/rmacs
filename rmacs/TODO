@@ -15,8 +15,8 @@ a global mark and point per buffer, updated when window-specific mark
 and point are updated, used to initialise window mark and point when a
 buffer is shown in a window
 
-give commands positional arguments with argument value collectors
-apply this to the `unhandled-command` code in `invoke`
+maybe make the `unhandled-command` code in `invoke` send an event
+rather than hardcoded aborting
 
 Plan:
  - visit-file command

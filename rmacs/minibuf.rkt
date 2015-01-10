@@ -2,6 +2,7 @@
 
 (provide minibuffer-history
          read-from-minibuffer
+         string-arg
          read-string-from-minibuffer
          recursive-edit-field-start
          recursive-edit-mode
@@ -50,6 +51,17 @@
   (start-recursive-edit editor buf)
   buf)
 
+(define ((string-arg prompt
+                     #:history [history-fn minibuffer-history]
+                     #:defaults [defaults-fn (lambda (ed) '())]
+                     #:acceptable? [acceptable? (lambda (v) #t)])
+         ed sig argname k)
+  (read-string-from-minibuffer ed prompt
+                               #:history (history-fn ed)
+                               #:defaults (defaults-fn ed)
+                               #:acceptable? acceptable?
+                               #:on-accept k))
+
 (define (read-string-from-minibuffer editor
                                      prompt
                                      #:history [history (minibuffer-history editor)]
@@ -84,7 +96,13 @@
 (define-buffer-local recursive-edit-cancel-hook (lambda () (void)))
 (define-buffer-local recursive-edit-acceptable-hook (lambda (v) #t))
 
-(define-command recursive-edit-mode (abort-recursive-edit #:buffer buf #:editor ed)
+(define-simple-command-signature (abort-recursive-edit))
+(define-simple-command-signature (exit-minibuffer))
+(define-simple-command-signature (minibuf-beginning-of-line))
+(define-simple-command-signature (next-history-element))
+(define-simple-command-signature (previous-history-element))
+
+(define-command recursive-edit-mode cmd:abort-recursive-edit (#:buffer buf #:editor ed)
   #:bind-key "C-g"
   (abandon-recursive-edit ed)
   (select-window ed (recursive-edit-selected-window buf))
@@ -97,7 +115,7 @@
   (buffer-region-update! buf recursive-edit-field-start (buffer-size buf)
                          (lambda (_old) (string->rope str))))
 
-(define-command recursive-edit-mode (exit-minibuffer #:buffer buf #:editor ed)
+(define-command recursive-edit-mode cmd:exit-minibuffer (#:buffer buf #:editor ed)
   #:bind-key "C-m"
   #:bind-key "C-j"
   (define result (recursive-edit-contents buf))
@@ -108,7 +126,7 @@
     (when (string? maybe-revised-result)
       (history-push! (recursive-edit-history buf) maybe-revised-result))))
 
-(define-command recursive-edit-mode (minibuf-beginning-of-line #:buffer buf #:window win)
+(define-command recursive-edit-mode cmd:minibuf-beginning-of-line (#:buffer buf #:window win)
   #:bind-key "C-a"
   #:bind-key "<home>"
   (define limit (buffer-mark-pos* buf recursive-edit-field-start))
@@ -116,13 +134,13 @@
       (window-move-to! win limit)
       (buffer-move-mark-to-start-of-line! buf (window-point win))))
 
-(define-command recursive-edit-mode
-  (next-history-element #:buffer buf #:window win #:editor ed)
+(define-command recursive-edit-mode cmd:next-history-element
+  (#:buffer buf #:window win #:editor ed)
   #:bind-key "M-n"
   (adjust-history-index! ed win buf -1))
 
-(define-command recursive-edit-mode
-  (previous-history-element #:buffer buf #:window win #:editor ed)
+(define-command recursive-edit-mode cmd:previous-history-element
+  (#:buffer buf #:window win #:editor ed)
   #:bind-key "M-p"
   (adjust-history-index! ed win buf 1))
 
@@ -194,7 +212,9 @@
                        (- i 1)))))
         (substring (car strs) 0 len))))
 
-(define-command completing-read-mode (minibuffer-complete #:buffer buf #:editor ed)
+(define-simple-command-signature (minibuffer-complete))
+
+(define-command completing-read-mode cmd:minibuffer-complete (#:buffer buf #:editor ed)
   #:bind-key "C-i"
   #:bind-key "tab"
   (define string=? (completing-read-string=?-hook buf))

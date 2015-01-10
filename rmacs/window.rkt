@@ -49,10 +49,12 @@
   (void))
 
 (define (window-command selector window
+                        #:args args
                         #:editor [editor #f]
                         #:keyseq [keyseq #f]
                         #:prefix-arg [prefix-arg '#:default])
   (command selector (window-buffer window)
+           #:args args
            #:window window
            #:editor editor
            #:keyseq keyseq
