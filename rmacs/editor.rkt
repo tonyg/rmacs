@@ -434,6 +434,8 @@
   (log-info "point ~v ~v" (window-point win) (buffer-mark-pos* buf (window-point win)))
   (log-info "mark ~v" (buffer-mark-pos* buf region-mark))
   (log-info "title ~v" (buffer-title buf))
+  (log-info "locals:")
+  (for (((k v) (in-hash (buffer-locals buf)))) (log-info" - ~a: ~v" k v))
   (log-info "rope:")
   (pretty-write (buffer-rope buf) (current-error-port))
   (log-info "modeset:")
