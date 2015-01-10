@@ -415,7 +415,7 @@
 
 (define-local-definer define-command-local
   (lambda (c) (if c (command-locals c) (make-locals)))
-  set-command-locals!)
+  (lambda (c ls) (when c (set-command-locals! c ls))))
 
 (define (buffer-lift f buf . args)
   (define new-rope (apply f (buffer-rope buf) args))
