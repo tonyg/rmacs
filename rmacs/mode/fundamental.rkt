@@ -74,6 +74,7 @@
 (define-simple-command-signature (copy-region-as-kill))
 (define-simple-command-signature (kill-ring-save))
 (define-simple-command-signature (kill-line))
+(define-simple-command-signature (undo))
 
 (define (default-search-pattern ed)
   (cond [(history-ref (minibuffer-history ed) 0) => list]
@@ -400,3 +401,33 @@
   (needle #:buffer buf #:window win #:editor ed)
   #:bind-key "C-M-s"
   (search-in-buffer ed win buf 'forward-regexp needle))
+
+(define-buffer-local undo-list '())
+(define-command-local repeated-undo-list)
+
+(define undo-insertion-coalesce-limit 20)
+
+(define-command fundamental-mode cmd:buffer-changed (pos old-content new-content #:buffer buf)
+  (undo-list buf
+             (match (undo-list buf)
+               [(cons (list prev-pos (? rope-empty?) prev-insertion) rest)
+                #:when (and (rope-empty? old-content)
+                            (= prev-pos (- pos (rope-size prev-insertion)))
+                            (< (+ (rope-size prev-insertion) (rope-size new-content))
+                               undo-insertion-coalesce-limit))
+                (cons (list prev-pos old-content (rope-append prev-insertion new-content)) rest)]
+               [rest
+                (cons (list pos old-content new-content) rest)])))
+
+(define-command fundamental-mode cmd:undo (#:command cmd #:buffer buf #:window win #:editor ed)
+  #:bind-key "C-_"
+  #:bind-key "C-/"
+  #:bind-key "C-x u"
+  (define actions (or (repeated-undo-list (editor-last-command ed)) (undo-list buf)))
+  (match actions
+    ['() (abort "No further undo information")]
+    [(cons (list pos old-content new-content) rest)
+     (repeated-undo-list cmd rest)
+     (buffer-region-update! buf pos (+ pos (rope-size new-content))
+                            (lambda (_new-content-again) old-content))
+     (buffer-mark! buf (window-point win) (+ pos (rope-size old-content)))]))

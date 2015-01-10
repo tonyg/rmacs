@@ -133,7 +133,10 @@
 (define (empty-rope) #f)
 
 (define (rope-empty? r)
-  (equal? r (empty-rope)))
+  (match r
+    [#f #t]
+    [(rope (? strand-empty?) #f #f 0 (? set-empty?) _) #t]
+    [_ #f]))
 
 (define (rope?* r)
   (or (rope-empty? r)
