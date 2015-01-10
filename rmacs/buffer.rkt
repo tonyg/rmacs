@@ -373,7 +373,8 @@
   (define start-pos (->pos buf start-pos-or-mtype 'buffer-search*))
   (define-values (l r) (rope-split (buffer-rope buf) start-pos))
   (define delta+len (find-delta (if forward? r l)))
-  (and delta+len
+  (and delta+len ;; find-delta may return #f ...
+       (car delta+len) ;; ... or (cons #f _) to signal failure
        (let ((new-pos (clamp (+ start-pos (if forward?
                                               (car delta+len)
                                               (- (car delta+len) (rope-size l))))
