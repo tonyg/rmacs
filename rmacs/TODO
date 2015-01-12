@@ -1,3 +1,8 @@
+C-s foo C-s --> exception rather than temporary message in minibuffer
+
+C-x b --> doesn't seem to have the right default in cases of three
+buffers or more
+
 Make it reloadable
 
 Catch and handle SIGWINCH.
