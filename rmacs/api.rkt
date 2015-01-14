@@ -11,6 +11,7 @@
 (require "local.rkt")
 (require "ring.rkt")
 (require "history.rkt")
+(require "file.rkt")
 
 (require "circular-list.rkt")
 
@@ -24,5 +25,6 @@
                        "local.rkt"
                        "ring.rkt"
                        "history.rkt"
+                       "file.rkt"
 
                        "circular-list.rkt"))
