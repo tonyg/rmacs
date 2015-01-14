@@ -6,6 +6,7 @@
 (require racket/match)
 (require racket/string)
 (require "../api.rkt")
+(require "../strings.rkt")
 
 (define fundamental-mode (make-mode "fundamental"))
 
@@ -43,6 +44,35 @@
                                  (k target)
                                  (buffer-title target))))
 
+(define ((read-filesystem-path) ed sig argname k)
+  (local-require racket/path)
+  (define buf (editor-active-buffer ed))
+  (define src (and buf (buffer-source buf)))
+  (completing-read ed
+                   "Find file: "
+                   (lambda (prefix0 string=?)
+                     (define prefix (simplify-path prefix0))
+                     (define-values (dirname filename)
+                       (let-values (((d f dir?) (split-path prefix)))
+                         (if dir?
+                             (values (path->string prefix) #f)
+                             (values (path->string d) (path->string f)))))
+                     (log-info "dirname ~v filename ~v" dirname filename)
+                     (for/list ((p (directory-list dirname))
+                                #:when (or (not filename)
+                                           (string-prefix? filename (path->string p) string=?)))
+                       (define q (path->string (build-path dirname p)))
+                       (if (directory-exists? q) (string-append q "/") q)))
+                   #:initial
+                   (if src
+                       (string-append
+                        (path->string (normalize-path
+                                       (simplify-path (build-path (buffer-source-path src) 'up))))
+                        "/")
+                       (path->string (normalize-path ".")))
+                   #:on-accept (lambda (str)
+                                 (k str))))
+
 (define-simple-command-signature (quoted-insert))
 (define-simple-command-signature (newline))
 (define-simple-command-signature (indent-for-tab-command))
@@ -75,6 +105,7 @@
 (define-simple-command-signature (kill-ring-save))
 (define-simple-command-signature (kill-line))
 (define-simple-command-signature (undo))
+(define-simple-command-signature (find-file [path (read-filesystem-path)]))
 
 (define (default-search-pattern ed)
   (cond [(history-ref (minibuffer-history ed) 0) => list]
@@ -431,3 +462,7 @@
      (buffer-region-update! buf pos (+ pos (rope-size new-content))
                             (lambda (_new-content-again) old-content))
      (buffer-mark! buf (window-point win) (+ pos (rope-size old-content)))]))
+
+(define-command fundamental-mode cmd:find-file (path #:editor ed)
+  #:bind-key "C-x C-f"
+  (visit-file! ed path))
