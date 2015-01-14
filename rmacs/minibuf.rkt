@@ -228,9 +228,7 @@
   #:bind-key "tab"
   (define string=? (completing-read-string=?-hook buf))
   (define prefix (recursive-edit-contents buf))
-  (define unfiltered-completions ((completing-read-completion-hook buf) prefix string=?))
-  (define completions (filter (lambda (s) (string-prefix? prefix s string=?))
-                              unfiltered-completions))
+  (define completions ((completing-read-completion-hook buf) prefix string=?))
   (if (pair? completions)
       (let ((common-prefix (common-string-prefix completions string=?))
             (complete? (null? (cdr completions))))
