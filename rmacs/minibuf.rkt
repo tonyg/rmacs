@@ -31,6 +31,7 @@
 (define (read-from-minibuffer editor
                               prompt
                               #:history [history (minibuffer-history editor)]
+                              #:initial [initial ""]
                               #:defaults [defaults '()]
                               #:acceptable? [acceptable? (lambda (v) #t)]
                               #:on-accept k-accept
@@ -40,6 +41,7 @@
   (buffer-add-mode! buf recursive-edit-mode)
   (buffer-replace-contents! buf (string->rope prompt))
   (buffer-mark! buf recursive-edit-field-start (buffer-size buf))
+  (set-recursive-edit-contents! buf initial)
   (recursive-edit-selected-window buf (editor-active-window editor))
   (recursive-edit-history buf (or history (make-history))) ;; #f -> transient history
   (recursive-edit-defaults buf defaults)
@@ -53,11 +55,13 @@
 
 (define ((string-arg prompt
                      #:history [history-fn minibuffer-history]
+                     #:initial [initial ""]
                      #:defaults [defaults-fn (lambda (ed) '())]
                      #:acceptable? [acceptable? (lambda (v) #t)])
          ed sig argname k)
   (read-string-from-minibuffer ed prompt
                                #:history (history-fn ed)
+                               #:initial initial
                                #:defaults (defaults-fn ed)
                                #:acceptable? acceptable?
                                #:on-accept k))
@@ -65,6 +69,7 @@
 (define (read-string-from-minibuffer editor
                                      prompt
                                      #:history [history (minibuffer-history editor)]
+                                     #:initial [initial ""]
                                      #:defaults [defaults '()]
                                      #:acceptable? [acceptable? (lambda (v) #t)]
                                      #:on-accept k-accept
@@ -72,6 +77,7 @@
   (read-from-minibuffer editor
                         prompt
                         #:history history
+                        #:initial initial
                         #:defaults defaults
                         #:acceptable? acceptable?
                         #:on-accept (lambda (result)
@@ -111,9 +117,10 @@
 (define (recursive-edit-contents buf)
   (rope->string (buffer-region buf recursive-edit-field-start (buffer-size buf))))
 
-(define (set-recursive-edit-contents! buf str)
+(define (set-recursive-edit-contents! buf str #:notify? [notify? #t])
   (buffer-region-update! buf recursive-edit-field-start (buffer-size buf)
-                         (lambda (_old) (string->rope str))))
+                         (lambda (_old) (string->rope str))
+                         #:notify? notify?))
 
 (define-command recursive-edit-mode cmd:exit-minibuffer (#:buffer buf #:editor ed)
   #:bind-key "C-m"
@@ -173,12 +180,14 @@
                          completion-fn
                          #:string=? [string=? string=?]
                          #:history [history (minibuffer-history editor)]
+                         #:initial [initial ""]
                          #:defaults [defaults '()]
                          #:acceptable? [acceptable? (lambda (v) #t)]
                          #:on-accept k-accept
                          #:on-cancel [k-cancel void])
   (define buf (read-from-minibuffer editor prompt
                                     #:history history
+                                    #:initial initial
                                     #:defaults defaults
                                     #:acceptable? acceptable?
                                     #:on-accept k-accept
