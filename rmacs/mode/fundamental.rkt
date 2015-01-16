@@ -57,7 +57,6 @@
                          (if dir?
                              (values (path->string prefix) #f)
                              (values (path->string d) (path->string f)))))
-                     (log-info "dirname ~v filename ~v" dirname filename)
                      (for/list ((p (directory-list dirname))
                                 #:when (or (not filename)
                                            (string-prefix? filename (path->string p) string=?)))
