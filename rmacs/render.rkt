@@ -51,7 +51,8 @@
   (define buf (window-buffer win))
   (define old-top-of-window-pos (or (buffer-mark-pos* buf (window-top win)) 0))
   (define preferred-distance-from-bottom
-    (ceiling (* available-line-count (- 1 preferred-position-fraction))))
+    (min (floor (* available-line-count preferred-position-fraction))
+         (- available-line-count 1)))
   (define g (buffer-lines-reverse/wrap buf (window-point win) basic-wrap window-width))
   (define spans
     (let loop ((line-count 0)
