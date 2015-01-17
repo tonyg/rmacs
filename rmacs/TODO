@@ -37,6 +37,3 @@ perhaps this is best done when a modeset is applied to a buffer?
 `rope-empty?` is too complicated. Ensure that degenerate empty ropes
 are never constructed, instead; this will allow simplification of
 `rope-empty?` and will ensure all empty ropes are eq? to each other.
-
-undo should mark the buffer as clean when it undoes back to the most
-recent save point

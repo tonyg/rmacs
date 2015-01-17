@@ -440,17 +440,22 @@
 
 (define undo-insertion-coalesce-limit 20)
 
-(define-command fundamental-mode cmd:buffer-changed (pos old-content new-content #:buffer buf)
+(define-command fundamental-mode cmd:buffer-changed
+  (was-dirty? pos old-content new-content #:buffer buf)
   (undo-list buf
              (match (undo-list buf)
-               [(cons (list prev-pos (? rope-empty?) prev-insertion) rest)
+               [(cons (list prev-was-dirty? prev-pos (? rope-empty?) prev-insertion) rest)
                 #:when (and (rope-empty? old-content)
                             (= prev-pos (- pos (rope-size prev-insertion)))
                             (< (+ (rope-size prev-insertion) (rope-size new-content))
                                undo-insertion-coalesce-limit))
-                (cons (list prev-pos old-content (rope-append prev-insertion new-content)) rest)]
+                (cons (list prev-was-dirty?
+                            prev-pos
+                            old-content
+                            (rope-append prev-insertion new-content))
+                      rest)]
                [rest
-                (cons (list pos old-content new-content) rest)])))
+                (cons (list was-dirty? pos old-content new-content) rest)])))
 
 (define-command fundamental-mode cmd:undo (#:command cmd #:buffer buf #:window win #:editor ed)
   #:bind-key "C-_"
@@ -459,11 +464,12 @@
   (define actions (or (repeated-undo-list (editor-last-command ed)) (undo-list buf)))
   (match actions
     ['() (abort "No further undo information")]
-    [(cons (list pos old-content new-content) rest)
+    [(cons (list was-dirty? pos old-content new-content) rest)
      (repeated-undo-list cmd rest)
      (buffer-region-update! buf pos (+ pos (rope-size new-content))
                             (lambda (_new-content-again) old-content))
-     (buffer-mark! buf (window-point win) (+ pos (rope-size old-content)))]))
+     (buffer-mark! buf (window-point win) (+ pos (rope-size old-content)))
+     (when (not was-dirty?) (mark-buffer-clean! buf))]))
 
 (define-command fundamental-mode cmd:find-file (path #:editor ed)
   #:bind-key "C-x C-f"

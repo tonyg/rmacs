@@ -353,29 +353,32 @@
     (set-mark rn mtype pos #t)))
 
 (define-simple-command-signature
-  (buffer-changed [pos (const-arg 0)]
+  (buffer-changed [was-dirty? (const-arg #f)]
+                  [pos (const-arg 0)]
                   [old-content (const-arg (empty-rope))]
                   [new-content (const-arg (empty-rope))])
   #:category event)
 
-(define (send-edit-notification! buf pos old-content new-content)
-  (invoke (make-command cmd:buffer-changed buf #:args (list pos old-content new-content))
+(define (send-edit-notification! buf was-dirty? pos old-content new-content)
+  (invoke (make-command cmd:buffer-changed buf #:args (list was-dirty? pos old-content new-content))
           #:error-if-unhandled? #f))
 
 (define (buffer-region-update! buf pm1 pm2 updater #:notify? [notify? #t])
   (define-values (l lo old-m hi r) (buffer-region-split buf pm1 pm2))
   (define new-m (transfer-marks old-m (updater old-m)))
   (set-buffer-rope! buf (rope-append (rope-append l new-m) r))
+  (define old-dirty (buffer-dirty? buf))
   (when (buffer-source buf) (set-buffer-dirty?! buf #t))
-  (when notify? (send-edit-notification! buf lo old-m new-m))
+  (when notify? (send-edit-notification! buf old-dirty lo old-m new-m))
   buf)
 
 (define (buffer-insert! buf pos-or-mtype content-rope #:notify? [notify? #t])
   (define pos (->pos buf pos-or-mtype 'buffer-insert!))
   (define-values (l r) (rope-split (buffer-rope buf) pos))
   (set-buffer-rope! buf (rope-append (rope-append l content-rope) r))
+  (define old-dirty (buffer-dirty? buf))
   (when (buffer-source buf) (set-buffer-dirty?! buf #t))
-  (when notify? (send-edit-notification! buf pos (empty-rope) content-rope))
+  (when notify? (send-edit-notification! buf old-dirty pos (empty-rope) content-rope))
   buf)
 
 (define (buffer-replace-contents! buf content-rope)
