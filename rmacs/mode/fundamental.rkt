@@ -286,9 +286,10 @@
   #:bind-key "C-x o"
   (select-window ed (editor-next-window ed win)))
 
-(define-command fundamental-mode cmd:save-buffer (#:buffer buf)
+(define-command fundamental-mode cmd:save-buffer (#:buffer buf #:editor ed)
   #:bind-key "C-x C-s"
-  (save-buffer! buf))
+  (save-buffer! buf)
+  (message ed "Wrote ~a" (path->string (buffer-source-path (buffer-source buf)))))
 
 (define-command fundamental-mode cmd:execute-extended-command
   (signature #:editor ed #:prefix-arg prefix)
