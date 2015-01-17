@@ -31,7 +31,7 @@
            (file-or-directory-modify-seconds (buffer-source-path src)))
          (define (buffer-source-read src)
            (define p (buffer-source-path src))
-           (if p (file->string p) ""))
+           (if (and p (file-exists? p)) (file->string p) ""))
          (define (buffer-source-write src content)
            (call-with-output-file (buffer-source-path src)
              (lambda (p) (write-string content p))
