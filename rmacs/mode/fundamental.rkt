@@ -105,6 +105,8 @@
 (define-simple-command-signature (kill-line))
 (define-simple-command-signature (undo))
 (define-simple-command-signature (find-file [path (read-filesystem-path)]))
+(define-simple-command-signature (scroll-up-command))
+(define-simple-command-signature (scroll-down-command))
 
 (define (default-search-pattern ed)
   (cond [(history-ref (minibuffer-history ed) 0) => list]
@@ -148,10 +150,10 @@
   (buffer-insert! buf (window-point win) (string->rope "\t")))
 
 (define (plus-n-lines buf pos count)
-  (for/fold [(pos pos)] [(i count)] (+ (buffer-end-of-line buf pos) 1)))
+  (for/fold [(pos pos)] [(i (in-range count))] (+ (buffer-end-of-line buf pos) 1)))
 
 (define (minus-n-lines buf pos count)
-  (for/fold [(pos pos)] [(i count)] (- (buffer-start-of-line buf pos) 1)))
+  (for/fold [(pos pos)] [(i (in-range count))] (- (buffer-start-of-line buf pos) 1)))
 
 (define (move-forward-n-lines win count)
   (define buf (window-buffer win))
@@ -465,3 +467,18 @@
 (define-command fundamental-mode cmd:find-file (path #:editor ed)
   #:bind-key "C-x C-f"
   (visit-file! ed path))
+
+(define-command fundamental-mode cmd:scroll-up-command (#:buffer buf #:window win)
+  #:bind-key "C-v"
+  #:bind-key "<page-down>"
+  (define new-pos (buffer-start-of-line buf (minus-n-lines buf (window-bottom win) 1)))
+  (buffer-mark! buf (window-point win) new-pos)
+  (buffer-mark! buf (window-top win) new-pos))
+
+(define-command fundamental-mode cmd:scroll-down-command (#:buffer buf #:window win)
+  #:bind-key "M-v"
+  #:bind-key "<page-up>"
+  (define scroll-count (- (window-available-line-count win) 2))
+  (define new-top (buffer-start-of-line buf (minus-n-lines buf (window-top win) scroll-count)))
+  (buffer-mark! buf (window-point win) (window-top win))
+  (buffer-mark! buf (window-top win) new-top))

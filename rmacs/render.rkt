@@ -25,8 +25,6 @@
                 size-spec ;; SizeSpec
                 top ;; Nat, a row
                 left ;; Nat, a column
-                width ;; Nat
-                height ;; Nat
                 ) #:prefab)
 
 (define (newline? c) (equal? c #\newline))
@@ -78,10 +76,10 @@
 (define (tty-statusline-style t is-active?)
   (tty-set-pen! t (pen color-black color-white #f #f)))
 
-(define (render-window! t win window-top window-width window-height is-active?)
+(define (render-window! t win window-top is-active?)
   (define buf (window-buffer win))
-  (define available-line-count (if (window-status-line? win) (- window-height 1) window-height))
-  (define spans (frame! win available-line-count window-width))
+  (define available-line-count (window-available-line-count win))
+  (define spans (frame! win available-line-count (window-width win)))
   (define cursor-pos (buffer-mark-pos buf (window-point win)))
   (tty-goto t window-top 0)
   (tty-body-style t is-active?)
@@ -100,7 +98,7 @@
     (cond
      [(>= line-count available-line-count) (values max-rendered-pos cursor-coordinates)]
      [(null? spans)
-      (define g (buffer-lines-forward/wrap buf (window-point win) basic-wrap window-width))
+      (define g (buffer-lines-forward/wrap buf (window-point win) basic-wrap (window-width win)))
       (g) ;; discard first span, since it has already been covered
       (render-bottom-spans g line-count max-rendered-pos cursor-coordinates)]
      [else
@@ -133,6 +131,11 @@
   (buffer-mark! buf (window-bottom win) max-rendered-pos)
   cursor-coordinates)
 
+(define (layout! w size-spec top left width height)
+  (set-window-width! w width)
+  (set-window-height! w height)
+  (layout w size-spec top left))
+
 (define (layout-windows ws miniwin total-width total-height [minimum-height 4])
   (define miniwin-spans
     (frame! miniwin (min 4 total-height) total-width #:preferred-position-fraction 1))
@@ -154,7 +157,7 @@
               [(cons (list (== miniwin eq?) _) rest)
                (loop rest offset remaining)]
               [(cons (list w (and spec (absolute-size lines))) rest)
-               (cons (layout w spec offset 0 total-width lines)
+               (cons (layout! w spec offset 0 total-width lines)
                      (loop rest (+ offset lines) remaining))]
               [(cons (list w (and spec (relative-size weight))) rest)
                (define height (max minimum-height
@@ -162,28 +165,28 @@
                                     (round (* proportional-lines (/ weight total-weight))))))
                (if (>= remaining height)
                    (if (null? rest)
-                       (list (layout w spec offset 0 total-width remaining))
-                       (cons (layout w spec offset 0 total-width height)
+                       (list (layout! w spec offset 0 total-width remaining))
+                       (cons (layout! w spec offset 0 total-width height)
                              (loop rest (+ offset height) (- remaining height))))
                    (if (>= remaining minimum-height)
-                       (list (layout w spec offset 0 total-width remaining))
+                       (list (layout! w spec offset 0 total-width remaining))
                        '()))]))
-          (list (layout miniwin
-                        (absolute-size miniwin-height)
-                        (- total-height miniwin-height)
-                        0
-                        total-width
-                        miniwin-height))))
+          (list (layout! miniwin
+                         (absolute-size miniwin-height)
+                         (- total-height miniwin-height)
+                         0
+                         total-width
+                         miniwin-height))))
 
 (define (render-windows! t layouts active-window)
   (tty-body-style t #f)
   (tty-goto t 0 0)
   (define active-cursor-position
     (for/fold [(cursor-position #f)] [(e layouts)]
-      (match-define (layout w _spec window-top _left window-width window-height) e)
+      (match-define (layout w _spec window-top _left) e)
       (define is-active? (eq? w active-window))
       (define window-cursor-position
-        (render-window! t w window-top window-width window-height is-active?))
+        (render-window! t w window-top is-active?))
       (if is-active? window-cursor-position cursor-position)))
   (when active-cursor-position
     (tty-goto t (car active-cursor-position) (cadr active-cursor-position)))

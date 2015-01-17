@@ -10,7 +10,7 @@ See http://man7.org/tlpi/code/online/dist/tty/demo_SIGWINCH.c.html
 
 dabbrev-expand!
 
-page up / page down, motion word-by-word, motion sexp-by-sexp
+motion word-by-word, motion sexp-by-sexp
 
 racket-mode
 

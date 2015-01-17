@@ -7,6 +7,7 @@
          window-command
          window-move-to!
          position-visible?
+         window-available-line-count
          )
 
 (require racket/match)
@@ -20,6 +21,8 @@
                 point ;; MarkType
                 [buffer #:mutable] ;; (Option Buffer)
                 [status-line? #:mutable] ;; Boolean
+                [width #:mutable] ;; Option Nat -- set by layout-windows
+                [height #:mutable] ;; Option Nat -- set by layout-windows
                 ) #:prefab)
 
 (define (make-window initial-buffer #:point [initial-point-or-mark 0])
@@ -29,7 +32,9 @@
                     (mark-type (buffer-mark-type 'bottom id #f) 'left)
                     (mark-type (buffer-mark-type 'point id #t) 'right)
                     #f
-                    #t))
+                    #t
+                    #f
+                    #f))
   (set-window-buffer!* w initial-buffer initial-point-or-mark) ;; sets initial marks
   w)
 
@@ -71,3 +76,6 @@
   (define t (buffer-mark-pos* (window-buffer win) (window-top win)))
   (define b (buffer-mark-pos* (window-buffer win) (window-bottom win)))
   (and t b (<= t pos b)))
+
+(define (window-available-line-count win)
+  (- (window-height win) (if (window-status-line? win) 1 0)))

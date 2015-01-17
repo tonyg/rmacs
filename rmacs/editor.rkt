@@ -5,8 +5,6 @@
          configure-fresh-buffer!
          find-buffer
          window-layout
-         window-width
-         window-height
          open-window
          close-other-windows
          close-window
@@ -142,8 +140,6 @@
         [else #f]))
 
 (define window-size-spec (-layout-accessor- layout-size-spec))
-(define window-width (-layout-accessor- layout-width))
-(define window-height (-layout-accessor- layout-height))
 
 (define (update-window-entry editor win updater)
   (set-editor-windows! editor (circular-list-replacef (editor-windows editor)
@@ -447,9 +443,9 @@
   (cond [(editor-layout ed) =>
          (lambda (layouts)
            (for ((l layouts))
-             (match-define (layout w s tt ll ww hh) l)
+             (match-define (layout w s tt ll) l)
              (log-info " - ~a ~v top ~a left ~a width ~a height ~a"
-                       (window-id w) s tt ll ww hh)))]
+                       (window-id w) s tt ll (window-width w) (window-height w))))]
         [else (log-info " - not cached")])
   (log-info "editor size-specs: ~v"
             (for/list ((e (circular-list->list (editor-windows ed))))
