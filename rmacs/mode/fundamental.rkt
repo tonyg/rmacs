@@ -297,6 +297,7 @@
 
 (define-command fundamental-mode cmd:switch-to-buffer (target-buffer #:window win)
   #:bind-key "C-x b"
+  (buffer-reorder! target-buffer)
   (set-window-buffer! win target-buffer))
 
 (define-editor-local kill-ring*)

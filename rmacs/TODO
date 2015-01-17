@@ -1,6 +1,3 @@
-C-x b --> doesn't seem to have the right default in cases of three
-buffers or more
-
 Make it reloadable
 
 Catch and handle SIGWINCH.
