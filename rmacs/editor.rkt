@@ -229,12 +229,13 @@
                   #:keyseq keyseq
                   #:prefix-arg prefix-arg))
 
+(define ((abort-handler editor) e)
+  (message editor "~a" (exn-message e) #:duration (exn:abort-duration e))
+  (void))
+
 (define (invoke/history cmd)
   (define editor (command-editor cmd))
-  (with-handlers* ([exn:abort? (lambda (e)
-                                 (message editor "~a" (exn-message e)
-                                          #:duration (exn:abort-duration e))
-                                 (void))])
+  (with-handlers* ([exn:abort? (abort-handler editor)])
     (let ((old-last-command (editor-last-command editor)))
       (define result (invoke cmd))
       (when (eq? (editor-last-command editor) old-last-command)
@@ -242,11 +243,12 @@
       result)))
 
 (define (collect-args-and-invoke/history editor sig keyseq prefix-arg)
-  (collect-args sig editor (lambda (args)
-                             (invoke/history (editor-command sig editor
-                                                             #:args args
-                                                             #:keyseq keyseq
-                                                             #:prefix-arg prefix-arg)))))
+  (with-handlers* ([exn:abort? (abort-handler editor)])
+    (collect-args sig editor (lambda (args)
+                               (invoke/history (editor-command sig editor
+                                                               #:args args
+                                                               #:keyseq keyseq
+                                                               #:prefix-arg prefix-arg))))))
 
 (define (editor-last-command? editor . possible-signatures)
   (and (editor-last-command editor)
