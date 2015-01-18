@@ -289,6 +289,8 @@
 (define-command fundamental-mode cmd:save-buffer (#:buffer buf #:editor ed)
   #:bind-key "C-x C-s"
   (save-buffer! buf)
+  (undo-list buf (map (match-lambda [(list was-dirty? pos old new) (list #t pos old new)])
+                      (undo-list buf)))
   (message ed "Wrote ~a" (path->string (buffer-source-path (buffer-source buf)))))
 
 (define-command fundamental-mode cmd:execute-extended-command
