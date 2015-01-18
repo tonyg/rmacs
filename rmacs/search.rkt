@@ -13,24 +13,27 @@
 (require "rope.rkt")
 
 (define (table pattern)
-  (define t (make-vector (- (string-length pattern) 1)))
-  (vector-set! t 0 0)
-  (let loop ((pos 1) (candidate 0))
-    (cond
-     [(= pos (- (string-length pattern) 1))
-      t]
-     [(equal? (string-ref pattern pos)
-              (string-ref pattern candidate))
-      (vector-set! t pos (+ candidate 1))
-      (loop (+ pos 1)
-            (+ candidate 1))]
-     [(> candidate 0)
-      (loop pos
-            (vector-ref t candidate))]
-     [else
-      (vector-set! t pos 0)
-      (loop (+ pos 1)
-            0)])))
+  (define limit (- (string-length pattern) 1))
+  (if (positive? limit)
+      (let ((t (make-vector limit)))
+        (vector-set! t 0 0)
+        (let loop ((pos 1) (candidate 0))
+          (cond
+           [(= pos limit)
+            t]
+           [(equal? (string-ref pattern pos)
+                    (string-ref pattern candidate))
+            (vector-set! t pos (+ candidate 1))
+            (loop (+ pos 1)
+                  (+ candidate 1))]
+           [(> candidate 0)
+            (loop pos
+                  (vector-ref t candidate))]
+           [else
+            (vector-set! t pos 0)
+            (loop (+ pos 1)
+                  0)])))
+      #f))
 
 ;; String (Generator Char) -> (Option Index)
 (define (search-generator needle haystack)
