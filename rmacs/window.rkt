@@ -25,7 +25,7 @@
                 [height #:mutable] ;; Option Nat -- set by layout-windows
                 ) #:prefab)
 
-(define (make-window initial-buffer #:point [initial-point-or-mark 0])
+(define (make-window initial-buffer #:point [initial-point-or-mark point-mark])
   (define id (gensym 'window))
   (define w (window id
                     (mark-type (buffer-mark-type 'top id #f) 'left)
@@ -42,15 +42,17 @@
   (and (window-buffer w)
        (buffer-editor (window-buffer w))))
 
-(define (set-window-buffer!* win new [point-or-mark 0])
+(define (set-window-buffer!* win new [point-or-mark point-mark])
   (define old (window-buffer win))
   (when old
+    (let ((p (buffer-pos* old (window-point win))))
+      (when p (buffer-mark! old point-mark p)))
     (buffer-clear-mark! old (window-top win))
     (buffer-clear-mark! old (window-bottom win))
     (buffer-clear-mark! old (window-point win)))
   (set-window-buffer! win new)
   (when new
-    (buffer-mark! new (window-point win) point-or-mark))
+    (buffer-mark! new (window-point win) (or (buffer-pos* new point-or-mark) 0)))
   (void))
 
 (define (window-command selector window

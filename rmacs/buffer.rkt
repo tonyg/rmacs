@@ -2,6 +2,7 @@
 
 (provide (struct-out buffer-mark-type)
          region-mark
+         point-mark
          make-buffergroup
          initialize-buffergroup!
          buffergroup-buffer-titles
@@ -41,6 +42,7 @@
          buffer-mark
          buffer-mark-pos*
          buffer-mark-pos
+         buffer-pos*
          buffer-pos
          buffer-mark!
          buffer-clear-mark!
@@ -114,6 +116,7 @@
                  ) #:prefab)
 
 (define region-mark (mark-type (buffer-mark-type 'mark #f #f) 'left))
+(define point-mark  (mark-type (buffer-mark-type 'buffer-point #f #t) 'right))
 
 (define (make-buffergroup)
   (buffergroup circular-empty #f))
@@ -280,11 +283,18 @@
 (define (buffer-start-of-line buf pm) (buffer-findf buf pm newline? #:forward? #f))
 (define (buffer-end-of-line buf pm)   (buffer-findf buf pm newline? #:forward? #t))
 
+(define (->pos* buf pos-or-mtype what)
+  (if (number? pos-or-mtype)
+      (clamp pos-or-mtype buf)
+      (let ((p (buffer-mark-pos* buf pos-or-mtype)))
+        (and p (clamp p buf)))))
+
+(define (error-mark-type-not-found what mtype buf)
+  (error what "Mark type ~v not found; available mark types ~v" mtype (buffer-mark-types buf)))
+
 (define (->pos buf pos-or-mtype what)
-  (clamp (if (number? pos-or-mtype)
-             pos-or-mtype
-             (buffer-mark-pos buf pos-or-mtype what))
-         buf))
+  (or (->pos* buf pos-or-mtype what)
+      (error-mark-type-not-found what pos-or-mtype buf)))
 
 (define (buffer-mark-types buf)
   (rope-marks (buffer-rope buf)))
@@ -294,14 +304,17 @@
 
 (define (buffer-mark buf mtype [what 'buffer-mark])
   (or (buffer-mark* buf mtype)
-      (error what "Mark type ~v not found; available mark types ~v" mtype (buffer-mark-types buf))))
+      (error-mark-type-not-found what mtype buf)))
 
 (define (buffer-mark-pos* buf mtype)
   (find-mark-pos (buffer-rope buf) mtype))
 
 (define (buffer-mark-pos buf mtype [what 'buffer-mark-pos])
   (or (buffer-mark-pos* buf mtype)
-      (error what "Mark type ~v not found; available mark types ~v" mtype (buffer-mark-types buf))))
+      (error-mark-type-not-found what mtype buf)))
+
+(define (buffer-pos* buf pos-or-mtype)
+  (->pos* buf pos-or-mtype 'buffer-pos*))
 
 (define (buffer-pos buf pos-or-mtype)
   (->pos buf pos-or-mtype 'buffer-pos))

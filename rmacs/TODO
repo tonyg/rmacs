@@ -11,10 +11,6 @@ racket-mode
 
 mutability marks and checks during edits, motion
 
-a global mark and point per buffer, updated when window-specific mark
-and point are updated, used to initialise window mark and point when a
-buffer is shown in a window
-
 maybe make the `unhandled-command` code in `invoke` send an event
 rather than hardcoded aborting
 
