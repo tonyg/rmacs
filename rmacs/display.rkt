@@ -19,6 +19,7 @@
          tty-default-pen
          tty-pen
          tty-flush
+         tty-set-title!
          tty-next-key
          tty-next-key-evt
 
@@ -59,6 +60,8 @@
              [displayed-screen #:mutable] ;; Screen
              [pending-screen #:mutable] ;; Screen
              [utf-8-input? #:mutable] ;; Boolean
+             [displayed-title #:mutable] ;; (Option String)
+             [pending-title #:mutable] ;; (Option String)
              ) #:prefab)
 
 (define (make-screen rows columns pen)
@@ -88,7 +91,9 @@
                  [v (error 'RMACS_UTF8_INPUT
                            "Environment variable RMACS_UTF8_INPUT value ~v invalid: must be in ~v"
                            v
-                           (list "yes" "true" "1" "no" "false" "0"))])))
+                           (list "yes" "true" "1" "no" "false" "0"))])
+               #f
+               #f))
     (reset *stdin-tty*)
     (plumber-add-flush! (current-plumber)
                         (lambda (h)
@@ -364,10 +369,16 @@
                   (for ((row (in-range first-row (+ first-row line-count))))
                     (repair-line! tty old new row))))
   (output tty (goto-if-needed old (screen-cursor-row new) (screen-cursor-column new)))
+  (let ((new-title (tty-pending-title tty)))
+    (when (not (equal? new-title (tty-displayed-title tty)))
+      (when new-title (output tty (ansi:xterm-set-window-title new-title)))
+      (set-tty-displayed-title! tty new-title)))
   (flush tty)
   (set-tty-displayed-screen! tty (struct-copy screen new [pen (screen-pen old)]))
   (set-tty-pending-screen! tty (copy-screen new))
   tty)
+
+(define (tty-set-title! t str) (set-tty-pending-title! t str))
 
 ;;---------------------------------------------------------------------------
 ;; Input

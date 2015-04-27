@@ -190,4 +190,5 @@
       (if is-active? window-cursor-position cursor-position)))
   (when active-cursor-position
     (tty-goto t (car active-cursor-position) (cadr active-cursor-position)))
+  (tty-set-title! t (buffer-title (window-buffer active-window)))
   (tty-flush t))
