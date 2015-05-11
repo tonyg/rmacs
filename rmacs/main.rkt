@@ -9,6 +9,9 @@
 (require "mode.rkt")
 (require "mode/fundamental.rkt")
 
+(define (usable-terminal?)
+  (not (equal? (getenv "TERM") "dumb")))
+
 (define (rmacs #:initial-files [initial-files '()])
   (define e (make-editor #:default-modeset (modeset-add-mode kernel-modeset
                                                              fundamental-mode)))
@@ -18,6 +21,10 @@
 (module+ main
   (require racket/trace)
   (current-trace-notify (lambda (s) (log-info "TRACE: ~a" s)))
+  (when (not (usable-terminal?))
+    (error 'rmacs
+           "Cannot run with TERM=~a; terminal lacks essential features."
+           (getenv "TERM")))
   (void
    (rmacs #:initial-files (match (current-command-line-arguments)
                             ['#()
