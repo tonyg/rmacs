@@ -260,8 +260,12 @@
 
 (define *error-count* 0)
 (define (open-debugger editor exc)
-  (local-require (only-in web-server/private/util exn->string))
-  (define error-report (exn->string exc))
+  (define error-report
+    (if (exn? exc)
+        (parameterize ([current-error-port (open-output-string)])
+          ((error-display-handler) (exn-message exc) exc)
+          (get-output-string (current-error-port)))
+        (format "~v" exc)))
   (log-error "Exception:\n~a\n" error-report)
   (set! *error-count* (+ *error-count* 1))
   (when (>= *error-count* 3) (exit))
