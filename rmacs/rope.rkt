@@ -63,15 +63,21 @@
 ;; substring of a string.
 (struct strand (text offset count) #:prefab)
 
+;; A Marks is a (Hasheq MarkType Any), marks and their values at a
+;; particular position.
+(define (marks? x) (hash? x))
+
+;; A Piece is a Strand or a Marks, the value carried by a particular
+;; Rope node.
+
 ;; A Rope is a splay tree representing a long piece of text.
 ;; #f is the empty Rope; otherwise a (rope) struct instance.
 ;; INVARIANT: Adjacent ropes will be merged to maximize sharing.
-(struct rope (strand ;; Strand
+(struct rope (piece ;; Piece
               left ;; Rope or #f
               right ;; Rope or #f
               size* ;; Number, total length of this rope
               marks* ;; (Seteq MarkType)
-              mark-index ;; (Hasheq MarkType (Hash Number (Set Any))), marks in this span
               ) #:prefab)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -120,7 +126,8 @@
             (strand->string t2)))
 
 (define (strand-empty? t)
-  (zero? (strand-count t)))
+  (and (strand? t)
+       (zero? (strand-count t))))
 
 (module+ test
   (check-equal? (strand-count (empty-strand)) 0)
@@ -135,7 +142,7 @@
 (define (rope-empty? r)
   (match r
     [#f #t]
-    [(rope (? strand-empty?) #f #f 0 (? set-empty?) _) #t]
+    [(rope (? strand-empty?) #f #f 0 (? set-empty?)) #t]
     [_ #f]))
 
 (define (rope?* r)
@@ -143,7 +150,7 @@
       (rope? r)))
 
 (define (strand->rope t)
-  (rope t (empty-rope) (empty-rope) (strand-count t) (seteq) (hasheq)))
+  (rope t (empty-rope) (empty-rope) (strand-count t) (seteq)))
 
 (define (string->rope s)
   (strand->rope (string->strand s)))
@@ -154,12 +161,14 @@
     (when r
       (fill! (rope-left r) offset)
       (define lo (rope-lo r))
-      (define s (rope-strand r))
-      (string-copy! buf
-                    (+ offset lo)
-                    (strand-text s)
-                    (strand-offset s)
-                    (+ (strand-offset s) (strand-count s)))
+      (match (rope-piece r)
+        [(strand text text-offset text-count)
+         (string-copy! buf
+                       (+ offset lo)
+                       text
+                       text-offset
+                       (+ text-offset text-count))]
+        [(? marks?) (void)])
       (fill! (rope-right r) (+ offset lo (strand-count s)))))
   buf)
 
@@ -245,18 +254,11 @@
 ;; Pos points to a mark-position, not a character-position.
 (define (find-mark* r forward? mtype start-pos)
   (define (search-here r offset start-pos)
-    (define marks (hash-ref (rope-mark-index r) mtype #f))
-    (define lo (rope-lo r))
-    (if (not marks)
-        #f
-        (let ((pos-comparer (if forward? < >))
-              (boundary-comparer (if forward? >= <=)))
-          (for/fold [(candidate #f)] [((pos value) (in-hash marks))]
-            (if (and (or (not candidate)
-                         (pos-comparer pos (car candidate)))
-                     (boundary-comparer pos start-pos))
-                (cons (+ pos offset lo) value)
-                candidate)))))
+    (match (rope-piece r)
+      [(? marks? marks)
+       (and (hash-has-key? marks mtype)
+            (cons (+ (rope-lo r) offset) (hash-ref marks mtype)))]
+      [_ #f]))
   (define (search r offset start-pos)
     (and r
          (set-member? (rope-marks r) mtype)
@@ -285,65 +287,51 @@
   (cond [(find-mark* r forward? mtype start-pos) => car]
         [else #f]))
 
-(define (mark-union h1 h2 offset)
-  (for/fold [(h h1)] [((pos val) (in-hash h2))] (hash-set h (+ offset pos) val)))
-
 (define (find-all-marks/type r mtype)
-  (define (walk r)
+  (define (walk r offset acc)
     (if (set-member? (rope-marks r) mtype)
         (let-values (((lo hi) (rope-lo+hi r)))
-          (mark-union (walk (rope-left r))
-                      (mark-union (hash-ref (rope-mark-index r) mtype (lambda () (hash)))
-                                  (walk (rope-right r))
-                                  (- hi lo))
-                      lo))
-        (hash)))
-  (walk r))
+          (let* ((acc (walk (rope-left r) offset acc))
+                 (marks (rope-piece r))
+                 (acc (if (and (hash? r) (hash-has-key? r mtype))
+                          (hash-set acc (+ lo offset) (hash-ref marks mtype))
+                          acc)))
+            (walk (rope-right r) (+ offset hi) acc)))
+        acc))
+  (walk r 0 (hash)))
 
 (define (splay-to-pos what r0 pos [extra (lambda () "")])
   (define-values (found? r1) (splay-to r0 find-position pos))
   (when (not found?) (error what "Invalid position ~a~a" pos (extra)))
   r1)
 
-(define (add-mark-to-table old-marks mtype pos value)
-  (define old-mark (hash-ref old-marks mtype (lambda () (hash))))
-  (hash-set old-marks mtype (hash-set old-mark pos value)))
+(define (single-mark-rope mtype value)
+  (rope (hasheq mtype value) (empty-rope) (empty-rope) 0 (seteq)))
+
+(define (marks-rope? r)
+  (marks? (rope-piece r)))
+
+(define (strand-rope? r)
+  (strand? (rope-piece r)))
 
 (define (set-mark r0 mtype position value)
-  (define r (splay-to-pos 'set-mark r0 position (lambda () (format " setting mark ~a" mtype))))
-  (reindex
-   (if (rope-empty? r)
-       (rope (empty-strand)
-             (empty-rope)
-             (empty-rope)
-             'will-be-recomputed
-             'will-be-recomputed
-             (hasheq mtype (hash position value)))
-       (struct-copy rope r [mark-index (add-mark-to-table (rope-mark-index r)
-                                                          mtype
-                                                          (- position (rope-lo r))
-                                                          value)]))))
+  (define-values (l r) (rope-split r0 position))
+  (rope-append (rope-append l (single-mark-rope mtype value)) r))
+
+(define (remove-single-mark r mtype)
+  (define p (hash-remove (rope-piece r) mtype))
+  (if (hash-empty? p)
+      (rope-append (rope-left r) (rope-right r))
+      (reindex (struct-copy rope r [piece p]))))
 
 (define (clear-mark r0 mtype position)
-  (let walk ((r (splay-to-pos 'clear-mark
-                              r0
-                              position
-                              (lambda () (format " clearing mark ~a" mtype))))
-             (offset 0))
-    (if (not (has-mark? r mtype))
-        r
-        (let-values (((lo hi) (rope-lo+hi r)))
-          (reindex
-           (struct-copy rope r
-                        [left (walk (rope-left r) offset)]
-                        [right (walk (rope-right r) (+ offset hi))]
-                        [mark-index
-                         (let* ((old-marks (rope-mark-index r))
-                                (old-mark (hash-ref old-marks mtype (lambda () (hash)))))
-                           (define new-mark (hash-remove old-mark (- position offset (rope-lo r))))
-                           (if (hash-empty? new-mark)
-                               (hash-remove old-marks mtype)
-                               (hash-set old-marks mtype new-mark)))]))))))
+  (define-values (l r) (rope-split r0 position))
+  (rope-append (if (and (marks-rope? l) (eq? (mark-type-stickiness mtype) 'left))
+                   (remove-single-mark l mtype)
+                   l)
+               (if (and (marks-rope? r) (eq? (mark-type-stickiness mtype) 'right))
+                   (remove-single-mark r mtype)
+                   r)))
 
 (define (replace-mark r0 mtype new-pos new-value)
   (define pos (find-mark-pos r0 mtype))
@@ -351,11 +339,13 @@
 
 (define (clear-all-marks r)
   (and r
-       (struct-copy rope r
-                    [marks* (seteq)]
-                    [mark-index (hasheq)]
-                    [left (clear-all-marks (rope-left r))]
-                    [right (clear-all-marks (rope-right r))])))
+       (if (marks? (rope-piece r))
+           (rope-append (clear-all-marks (rope-left r))
+                        (clear-all-marks (rope-right r)))
+           (struct-copy rope r
+                        [marks* (seteq)]
+                        [left (clear-all-marks (rope-left r))]
+                        [right (clear-all-marks (rope-right r))]))))
 
 (define (rope-size r)
   (if r (rope-size* r) 0))
@@ -364,13 +354,22 @@
   (if r (rope-marks* r) (seteq)))
 
 (define (reindex r)
+  (define p (rope-piece r))
   (struct-copy rope r
                [size* (+ (rope-size (rope-left r))
                          (rope-size (rope-right r))
-                         (strand-count (rope-strand r)))]
+                         (if (strand? p) (strand-count p) 0))]
                [marks* (set-union (rope-marks (rope-left r))
                                   (rope-marks (rope-right r))
-                                  (list->seteq (hash-keys (rope-mark-index r))))]))
+                                  (if (marks? p) (list->seteq (hash-keys p)) (seteq)))]))
+
+(define (split-marks p)
+  (values (for/hash [((mtype value) (in-hash p)) #:when (eq? (mark-type-stickiness mtype) 'left)]
+            (values mtype value))
+          (for/hash [((mtype value) (in-hash p)) #:when (eq? (mark-type-stickiness mtype) 'right)]
+            (values mtype value))))
+
+XXX here
 
 (define (rope-split r0 position)
   (match (splay-to-pos 'rope-split r0 position)
@@ -407,17 +406,6 @@
       [else
        (values (left) (right))])]))
 
-(define (partition-mark-index index offset)
-  (for*/fold [(l (hasheq)) (r (hasheq))]
-             [((mtype posvals) (in-hash index))
-              ((pos val) (in-hash posvals))]
-    (values (if (or (< pos offset) (and (= pos offset) (eq? (mark-type-stickiness mtype) 'left)))
-                (add-mark-to-table l mtype pos val)
-                l)
-            (if (or (> pos offset) (and (= pos offset) (eq? (mark-type-stickiness mtype) 'right)))
-                (add-mark-to-table r mtype (- pos offset) val)
-                r))))
-
 (define (rope-append rl0 rr0)
   (cond
    [(rope-empty? rl0) rr0]
@@ -436,18 +424,6 @@
 
 (define (rope-concat rs)
   (foldr rope-append (empty-rope) rs))
-
-(define (merge-mark-indexes li ri offset)
-  (for*/fold [(i li)]
-             [((mtype posvals) (in-hash ri))
-              ((pos val) (in-hash posvals))]
-    (add-mark-to-table i mtype (+ pos offset) val)))
-
-(define (merge-rope-mark-index r index offset)
-  (reindex
-   (if (rope-empty? r)
-       (rope (empty-strand) (empty-rope) (empty-rope) 'will-be-recomputed 'will-be-recomputed index)
-       (struct-copy rope r [mark-index (merge-mark-indexes (rope-mark-index r) index offset)]))))
 
 (define (subrope r0 [lo0 #f] [hi0 #f])
   (define lo (compute-range-index lo0 0 (rope-size r0)))
