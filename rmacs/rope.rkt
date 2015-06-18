@@ -167,9 +167,10 @@
                        (+ offset lo)
                        text
                        text-offset
-                       (+ text-offset text-count))]
-        [(? marks?) (void)])
-      (fill! (rope-right r) (+ offset lo (strand-count s)))))
+                       (+ text-offset text-count))
+         (fill! (rope-right r) (+ offset lo text-count))]
+        [(? marks?)
+         (fill! (rope-right r) (+ offset lo))])))
   buf)
 
 (define (replace-left r n) (if r (reindex (struct-copy rope r [left n])) n))
@@ -221,7 +222,9 @@
 
 (define (rope-lo+hi r)
   (define lo (rope-lo r))
-  (values lo (+ lo (strand-count (rope-strand r)))))
+  (match (rope-piece r)
+    [(strand _ _ count) (values lo (+ lo count))]
+    [_ (values lo lo)]))
 
 (define (find-position pos r)
   (if (rope-empty? r)
@@ -306,7 +309,7 @@
   r1)
 
 (define (single-mark-rope mtype value)
-  (rope (hasheq mtype value) (empty-rope) (empty-rope) 0 (seteq)))
+  (rope (hasheq mtype value) (empty-rope) (empty-rope) 0 (seteq mtype)))
 
 (define (marks-rope? r)
   (marks? (rope-piece r)))
@@ -369,42 +372,40 @@
           (for/hash [((mtype value) (in-hash p)) #:when (eq? (mark-type-stickiness mtype) 'right)]
             (values mtype value))))
 
-XXX here
+;; Causes p2's values to override those of p1, in case of conflict.
+(define (merge-marks p1 p2)
+  (for/fold [(p p1)] [((mtype value) (in-hash p2))] (hash-set p mtype value)))
 
 (define (rope-split r0 position)
   (match (splay-to-pos 'rope-split r0 position)
     [(? rope-empty?) (values (empty-rope) (empty-rope))]
-    [(and r (rope t rl rr size marks mark-index))
+    [(and r (rope p rl rr size marks))
      ;; We know the position is in the root of r.
      (define-values (lo hi) (rope-lo+hi r))
-     (define offset (- position lo))
-     (define-values (left-index right-index) (partition-mark-index mark-index offset))
-     (define left-strand (substrand t 0 offset))
-     (define right-strand (substrand t offset))
-     (define (left)
-       (if (and (strand-empty? left-strand) (hash-empty? left-index))
-           rl
-           (reindex
-            (rope left-strand rl (empty-rope) 'will-be-recomputed (seteq) left-index))))
-     (define (right)
-       (if (and (strand-empty? right-strand) (hash-empty? right-index))
-           rr
-           (reindex
-            (rope right-strand (empty-rope) rr 'will-be-recomputed (seteq) right-index))))
      (cond
-      [(= position lo)
-       ;; We have to take care to move over any right-sticky marks
-       ;; in rl that happen to be at position.
-       (let-values (((rll rlr) (rope-split rl position)))
-         (values (merge-rope-mark-index rll left-index (if rll (strand-count (rope-strand rll)) 0))
-                 (rope-append rlr (right))))]
-      ;; [(= position hi)
-      ;;  ;; Likewise, for left-sticky marks.
-      ;;  (let-values (((rrl rrr) (rope-split rr 0)))
-      ;;    (values (rope-append (left) rrl)
-      ;;            (merge-rope-mark-index rrr right-index 0)))]
-      [else
-       (values (left) (right))])]))
+       [(= position lo)
+        (let-values (((_l rl) (splay-to rl find-position (rope-size rl))))
+          (if (and rl (marks? (rope-piece rl)))
+              (let-values (((left-p right-p) (split-marks (rope-piece rl))))
+                (values (reindex (struct-copy rope rl [piece left-p]))
+                        (rope-append (reindex (rope right-p (empty-rope) (empty-rope) 0 (seteq)))
+                                     rr)))
+              (values rl (replace-left r (empty-rope)))))]
+       [(= position hi)
+        ;; This only happens when position is right at the end of r0.
+        (when (not (rope-empty? rr))
+          (error 'rope-split "Internal error: invariant failure at right: ~v / ~v" position r))
+        (if (marks? p)
+            (let-values (((left-p right-p) (split-marks p)))
+              (values (reindex (struct-copy rope r [piece left-p]))
+                      (reindex (rope right-p (empty-rope) (empty-rope) 0 (seteq)))))
+            (values r (empty-rope)))]
+       [(marks? p)
+        (error 'rope-split "Internal error: invariant failure at top: ~v / ~v" position r)]
+       [else
+        (define offset (- position lo))
+        (values (reindex (rope (substrand p 0 offset) rl (empty-rope) 0 (seteq)))
+                (reindex (rope (substrand p offset) (empty-rope) rr 0 (seteq))))])]))
 
 (define (rope-append rl0 rr0)
   (cond
@@ -414,13 +415,16 @@ XXX here
     (define-values (_l rl) (splay-to rl0 find-position (rope-size rl0)))
     (define-values (_r rr) (splay-to rr0 find-position 0))
     ;; Both rl's right and rr's left are (empty-rope).
-    (define t (strand-maybe-append (rope-strand rl) (rope-strand rr)))
-    (if t
-        (let ((merged-index (merge-mark-indexes (rope-mark-index rl)
-                                                (rope-mark-index rr)
-                                                (strand-count (rope-strand rl)))))
-          (reindex (rope t (rope-left rl) (rope-right rr) 'will-be-recomputed (seteq) merged-index)))
-        (replace-right rl rr))]))
+    (define pl (rope-piece rl))
+    (define pr (rope-piece rr))
+    (cond
+      [(and (marks? pl) (marks? pr))
+       (reindex (rope (merge-marks pl pr) (rope-left rl) (rope-right rr) 0 (seteq)))]
+      [(and (strand? pl) (strand? pr) (strand-maybe-append pl pr)) =>
+       (lambda (t)
+         (reindex (rope t (rope-left rl) (rope-right rr) 0 (seteq))))]
+      [else
+       (replace-right rl rr)])]))
 
 (define (rope-concat rs)
   (foldr rope-append (empty-rope) rs))
@@ -438,19 +442,23 @@ XXX here
         (let outer ((r r))
           (and r
                (begin (outer (rope-left r))
-                      (match-let (((strand text offset count) (rope-strand r)))
-                        (do ((i 0 (+ i 1)))
-                            ((= i count))
-                          (yield (string-ref text (+ offset i)))))
+                      (match (rope-piece r)
+                        [(strand text offset count)
+                         (do ((i 0 (+ i 1)))
+                             ((= i count))
+                           (yield (string-ref text (+ offset i))))]
+                        [(? marks?) (void)])
                       (outer (rope-right r))))))
       (generator ()
         (let outer ((r r))
           (and r
                (begin (outer (rope-right r))
-                      (match-let (((strand text offset count) (rope-strand r)))
-                        (do ((i (- count 1) (- i 1)))
-                            ((negative? i))
-                          (yield (string-ref text (+ offset i)))))
+                      (match (rope-piece r)
+                        [(strand text offset count)
+                         (do ((i (- count 1) (- i 1)))
+                             ((negative? i))
+                           (yield (string-ref text (+ offset i))))]
+                        [(? marks?) (void)])
                       (outer (rope-left r))))))))
 
 (define (open-input-rope r #:name [name "<rope>"])
@@ -472,7 +480,11 @@ XXX here
              (set! stack rest)
              (retry)]
             [(cons (? rope? r) rest)
-             (set! stack (list* (rope-left r) (rope-strand r) (rope-right r) stack))
+             (define p (rope-piece r))
+             (set! stack
+                   (if (strand? p)
+                       (list* (rope-left r) p (rope-right r) stack)
+                       (list* (rope-left r)   (rope-right r) stack)))
              (retry)])
           (let ((count (min available (bytes-length bs))))
             (bytes-copy! bs 0 buffer offset (+ offset count))
@@ -504,14 +516,11 @@ XXX here
 
   (define demo-rope
     (let ((r (lambda (s ms L R)
-               (reindex (rope (strand s 0 (string-length s))
-                              L
-                              R
-                              'will-be-recomputed
-                              'will-be-recomputed
-                              (for/fold [(h (hasheq))] [(e ms)]
-                                (match-define (list mtype pos val) e)
-                                (add-mark-to-table h mtype pos val))))))
+               (define m
+                 (for/fold [(r (string->rope s))] [(e ms)]
+                   (match-define (list mtype pos val) e)
+                   (set-mark r mtype pos val)))
+               (rope-append L (rope-append m R))))
           (m1 (list (list mtype1 0 #t) (list mtype1 1 #t) (list mtype2 3 #t))))
       ;;  a b c d e f g h i j k l m n o p q r s t u
       ;; 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 2 2
