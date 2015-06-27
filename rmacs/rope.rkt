@@ -44,7 +44,6 @@
 
 (require racket/set)
 (require racket/match)
-(require racket/generator)
 
 (module+ test (require rackunit racket/pretty))
 
@@ -477,29 +476,63 @@
   m)
 
 (define (rope-generator r #:forward? [forward? #t])
+  (define stack '())
+  (define text "")
+  (define offset 0)
+  (define count 0)
+  (define (push! x) (when x (set! stack (cons x stack))))
+  (define (pop!) (and (pair? stack) (begin0 (car stack) (set! stack (cdr stack)))))
   (if forward?
-      (generator ()
-        (let outer ((r r))
-          (and r
-               (begin (outer (rope-left r))
-                      (match (rope-piece r)
-                        [(strand text offset count)
-                         (do ((i 0 (+ i 1)))
-                             ((= i count))
-                           (yield (string-ref text (+ offset i))))]
-                        [(? marks?) (void)])
-                      (outer (rope-right r))))))
-      (generator ()
-        (let outer ((r r))
-          (and r
-               (begin (outer (rope-right r))
-                      (match (rope-piece r)
-                        [(strand text offset count)
-                         (do ((i (- count 1) (- i 1)))
-                             ((negative? i))
-                           (yield (string-ref text (+ offset i))))]
-                        [(? marks?) (void)])
-                      (outer (rope-left r))))))))
+      (let ()
+        (define (push-r! r)
+          (when r
+            (push! (rope-right r))
+            (when (strand? (rope-piece r)) (push! (rope-piece r)))
+            (push-r! (rope-left r))))
+
+        (push-r! r)
+        (define i 0)
+        (define (g)
+          (if (< i count)
+              (begin0 (string-ref text (+ offset i))
+                (set! i (+ i 1)))
+              (match (pop!)
+                [#f #f]
+                [(strand t o c)
+                 (set! text t)
+                 (set! offset o)
+                 (set! count c)
+                 (set! i 0)
+                 (g)]
+                [(? rope? r)
+                 (push-r! r)
+                 (g)])))
+        g)
+      (let ()
+        (define (push-r! r)
+          (when r
+            (push! (rope-left r))
+            (when (strand? (rope-piece r)) (push! (rope-piece r)))
+            (push-r! (rope-right r))))
+
+        (push-r! r)
+        (define i (- count 1))
+        (define (g)
+          (if (>= i 0)
+              (begin0 (string-ref text (+ offset i))
+                (set! i (- i 1)))
+              (match (pop!)
+                [#f #f]
+                [(strand t o c)
+                 (set! text t)
+                 (set! offset o)
+                 (set! count c)
+                 (set! i (- count 1))
+                 (g)]
+                [(? rope? r)
+                 (push-r! r)
+                 (g)])))
+        g)))
 
 (define (open-input-rope r #:name [name "<rope>"])
   (define buffer #"")
