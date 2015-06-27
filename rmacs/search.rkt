@@ -9,7 +9,6 @@
 
 (require racket/set)
 (require racket/match)
-(require racket/generator)
 (require "rope.rkt")
 
 (define (table pattern)
@@ -100,6 +99,7 @@
 
 (module+ test
   (require rackunit)
+  (require racket/generator)
   (check-equal? (table "ABCDABD")
                 (vector 0 0 0 0 1 2))
   (check-equal? (table "PARTICIPATE IN PARACHUTE")
@@ -129,9 +129,9 @@
   (check-equal? (search-rope "xylophone" prejudice-rope) #f)
   (check-equal? (search-rope "xylophone" prejudice-rope #:forward? #f) #f)
 
-  (define (find-in-rope delims r)
+  (define (find-in-rope delims r #:forward? [forward? #t])
     (define chs (list->set (string->list delims)))
-    (findf-in-rope (lambda (c) (set-member? chs c)) r))
+    (findf-in-rope (lambda (c) (set-member? chs c)) r #:forward? forward?))
 
   (check-equal? (find-in-rope "\n" prejudice-rope) 116)
   (check-equal? (find-in-rope "at" prejudice-rope) 1)
