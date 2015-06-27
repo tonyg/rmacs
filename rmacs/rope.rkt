@@ -404,15 +404,10 @@
      ;; We know the position is in the root of r.
      (define-values (lo hi) (rope-lo+hi r))
      (cond
-       [(= position lo)
-        (let-values (((_l rl) (splay-to rl find-position (rope-size rl))))
-          (if (and rl (marks? (rope-piece rl)))
-              (let-values (((left-p right-p) (split-marks (rope-piece rl))))
-                (values (update-marks-rope rl left-p)
-                        (replace-left r (maybe-marks-rope right-p))))
-              (values rl (replace-left r (empty-rope)))))]
        [(= position hi)
         ;; This only happens when position is right at the end of r0.
+        ;; We check this condition *first* because (= position lo)
+        ;; might also be true, in the case where (marks? p).
         (when (not (rope-empty? rr))
           (error 'rope-split "Internal error: invariant failure at right: ~v / ~v" position r))
         (if (marks? p)
@@ -420,6 +415,13 @@
               (values (update-marks-rope r left-p)
                       (maybe-marks-rope right-p)))
             (values r (empty-rope)))]
+       [(= position lo)
+        (let-values (((_l rl) (splay-to rl find-position (rope-size rl))))
+          (if (and rl (marks? (rope-piece rl)))
+              (let-values (((left-p right-p) (split-marks (rope-piece rl))))
+                (values (update-marks-rope rl left-p)
+                        (replace-left r (maybe-marks-rope right-p))))
+              (values rl (replace-left r (empty-rope)))))]
        [(marks? p)
         (error 'rope-split "Internal error: invariant failure at top: ~v / ~v" position r)]
        [else
