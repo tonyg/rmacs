@@ -299,18 +299,26 @@
 (define (buffer-mark-types buf)
   (rope-marks (buffer-rope buf)))
 
-(define (buffer-mark* buf mtype)
-  (find-mark (buffer-rope buf) mtype))
+(define (buffer-mark* buf mtype
+                      #:forward? [forward? #t]
+                      #:position [start-pos (if forward? 0 (buffer-size buf))])
+  (find-mark (buffer-rope buf) mtype #:forward? forward? #:position start-pos))
 
-(define (buffer-mark buf mtype [what 'buffer-mark])
-  (or (buffer-mark* buf mtype)
+(define (buffer-mark buf mtype [what 'buffer-mark]
+                     #:forward? [forward? #t]
+                     #:position [start-pos (if forward? 0 (buffer-size buf))])
+  (or (buffer-mark* buf mtype #:forward? forward? #:position start-pos)
       (error-mark-type-not-found what mtype buf)))
 
-(define (buffer-mark-pos* buf mtype)
-  (find-mark-pos (buffer-rope buf) mtype))
+(define (buffer-mark-pos* buf mtype
+                          #:forward? [forward? #t]
+                          #:position [start-pos (if forward? 0 (buffer-size buf))])
+  (find-mark-pos (buffer-rope buf) mtype #:forward? forward? #:position start-pos))
 
-(define (buffer-mark-pos buf mtype [what 'buffer-mark-pos])
-  (or (buffer-mark-pos* buf mtype)
+(define (buffer-mark-pos buf mtype [what 'buffer-mark-pos]
+                         #:forward? [forward? #t]
+                         #:position [start-pos (if forward? 0 (buffer-size buf))])
+  (or (buffer-mark-pos* buf mtype #:forward? forward? #:position start-pos)
       (error-mark-type-not-found what mtype buf)))
 
 (define (buffer-pos* buf pos-or-mtype)
@@ -319,8 +327,12 @@
 (define (buffer-pos buf pos-or-mtype)
   (->pos buf pos-or-mtype 'buffer-pos))
 
-(define (buffer-mark! buf mtype pos-or-mtype #:value [value #t])
-  (buffer-lift replace-mark buf mtype (->pos buf pos-or-mtype 'buffer-mark!) value))
+(define (buffer-mark! buf mtype pos-or-mtype #:value [value #t] #:replace? [replace? #t])
+  (buffer-lift (if replace? replace-mark set-mark)
+               buf
+               mtype
+               (->pos buf pos-or-mtype 'buffer-mark!)
+               value))
 
 (define (buffer-clear-mark! buf mtype)
   (define pos (buffer-mark-pos* buf mtype))
