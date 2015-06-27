@@ -39,7 +39,7 @@
          replace-mark
          clear-all-marks
 
-         ;; dump-mark-tree
+         ;; dump-rope
          )
 
 (require racket/set)
@@ -235,22 +235,35 @@
          [(< pos hi) (values 'here #t)]
          [else (values 'right (- pos hi))]))))
 
-;; (define (dump-mark-tree r [offset 0])
-;;   (define (-> r offset)
-;;     (if r
-;;         (let-values (((lo hi) (rope-lo+hi r)))
-;;           (list ;; (list 'text (strand->string (rope-strand r)))
-;;                 (list 'marks* (set->list (rope-marks* r)))
-;;                 (list 'mark-index
-;;                       (for*/list (((k t) (in-hash (rope-mark-index r)))
-;;                                   ((p v) (in-hash t)))
-;;                         (list k (+ p offset lo) v)))
-;;                 (list 'bounds offset (+ offset lo) (+ offset hi) (+ offset (rope-size r)))
-;;                 (list 'left (-> (rope-left r) offset))
-;;                 (list 'right (-> (rope-right r) (+ offset hi)))))
-;;         'empty))
-;;   (local-require racket/pretty)
-;;   (pretty-print (-> r offset) (current-error-port))
+;; (define (check-invariants! r #:context [context (lambda () (void))])
+;;   (local-require racket/pretty (only-in racket/list flatten))
+;;   (let loop ((f (flatten (rope->debug-sexp r))))
+;;     (match f
+;;       ['() (void)]
+;;       [(list* (vector _ (? vector?)) (vector _ (? vector?)) rest)
+;;        (dump-rope r)
+;;        (printf "context:\n")
+;;        (pretty-print (context))
+;;        (error 'check-invariants! "Adjacent marks invariant violated")]
+;;       [(cons _ rest)
+;;        (loop rest)]))
+;;   r)
+
+;; (define (rope->debug-sexp r [offset 0])
+;;   (match r
+;;     [#f '()]
+;;     [(rope piece left right size marks)
+;;      (define-values (lo hi) (rope-lo+hi r))
+;;      (list (rope->debug-sexp left offset)
+;;            (match piece
+;;              [(? strand? s) (strand->string s)]
+;;              [(? marks? m) (vector (+ lo offset) (for/vector [((k v) (in-hash m))] (list k v)))])
+;;            (rope->debug-sexp right (+ offset hi)))]))
+
+;; (define (dump-rope r [offset 0] #:port [port (current-output-port)])
+;;   (local-require racket/pretty racket/list)
+;;   (pretty-print (rope->debug-sexp r offset) port)
+;;   ;; (pretty-print (flatten (rope->debug-sexp r offset)) port)
 ;;   r)
 
 ;; Searches from pos (inclusive) in the direction indicated.
@@ -267,10 +280,10 @@
          (set-member? (rope-marks r) mtype)
          (let-values (((lo hi) (rope-lo+hi r)))
            (if forward?
-               (or (and (< start-pos lo) (search (rope-left r) offset start-pos))
+               (or (and (<= start-pos lo) (search (rope-left r) offset start-pos))
                    (and (<= start-pos hi) (search-here r offset (- start-pos lo)))
                    (search (rope-right r) (+ offset hi) (- start-pos hi)))
-               (or (and (> start-pos hi) (search (rope-right r) (+ offset hi) (- start-pos hi)))
+               (or (and (>= start-pos hi) (search (rope-right r) (+ offset hi) (- start-pos hi)))
                    (and (>= start-pos lo) (search-here r offset (- start-pos lo)))
                    (search (rope-left r) offset start-pos)))
            )))
@@ -296,7 +309,7 @@
         (let-values (((lo hi) (rope-lo+hi r)))
           (let* ((acc (walk (rope-left r) offset acc))
                  (marks (rope-piece r))
-                 (acc (if (and (hash? r) (hash-has-key? r mtype))
+                 (acc (if (and (hash? marks) (hash-has-key? marks mtype))
                           (hash-set acc (+ lo offset) (hash-ref marks mtype))
                           acc)))
             (walk (rope-right r) (+ offset hi) acc)))
@@ -312,23 +325,31 @@
   (rope (hasheq mtype value) (empty-rope) (empty-rope) 0 (seteq mtype)))
 
 (define (marks-rope? r)
-  (marks? (rope-piece r)))
+  (and (rope? r) (marks? (rope-piece r))))
 
 (define (strand-rope? r)
-  (strand? (rope-piece r)))
+  (and (rope? r) (strand? (rope-piece r))))
 
 (define (set-mark r0 mtype position value)
   (define-values (l r) (rope-split r0 position))
   (rope-append (rope-append l (single-mark-rope mtype value)) r))
 
-(define (remove-single-mark r mtype)
-  (define p (hash-remove (rope-piece r) mtype))
+(define (update-marks-rope r p)
   (if (hash-empty? p)
       (rope-append (rope-left r) (rope-right r))
       (reindex (struct-copy rope r [piece p]))))
 
+(define (maybe-marks-rope p)
+  (if (hash-empty? p)
+      (empty-rope)
+      (reindex (rope p (empty-rope) (empty-rope) 0 (seteq)))))
+
+(define (remove-single-mark r mtype)
+  (update-marks-rope r (hash-remove (rope-piece r) mtype)))
+
 (define (clear-mark r0 mtype position)
-  (define-values (l r) (rope-split r0 position))
+  (define-values (l r1) (rope-split r0 position))
+  (define r (hoist-left-marks r1))
   (rope-append (if (and (marks-rope? l) (eq? (mark-type-stickiness mtype) 'left))
                    (remove-single-mark l mtype)
                    l)
@@ -387,9 +408,8 @@
         (let-values (((_l rl) (splay-to rl find-position (rope-size rl))))
           (if (and rl (marks? (rope-piece rl)))
               (let-values (((left-p right-p) (split-marks (rope-piece rl))))
-                (values (reindex (struct-copy rope rl [piece left-p]))
-                        (rope-append (reindex (rope right-p (empty-rope) (empty-rope) 0 (seteq)))
-                                     rr)))
+                (values (update-marks-rope rl left-p)
+                        (replace-left r (maybe-marks-rope right-p))))
               (values rl (replace-left r (empty-rope)))))]
        [(= position hi)
         ;; This only happens when position is right at the end of r0.
@@ -397,8 +417,8 @@
           (error 'rope-split "Internal error: invariant failure at right: ~v / ~v" position r))
         (if (marks? p)
             (let-values (((left-p right-p) (split-marks p)))
-              (values (reindex (struct-copy rope r [piece left-p]))
-                      (reindex (rope right-p (empty-rope) (empty-rope) 0 (seteq)))))
+              (values (update-marks-rope r left-p)
+                      (maybe-marks-rope right-p)))
             (values r (empty-rope)))]
        [(marks? p)
         (error 'rope-split "Internal error: invariant failure at top: ~v / ~v" position r)]
@@ -407,24 +427,42 @@
         (values (reindex (rope (substrand p 0 offset) rl (empty-rope) 0 (seteq)))
                 (reindex (rope (substrand p offset) (empty-rope) rr 0 (seteq))))])]))
 
+;; Needed because splaying all the way left, when there are marks at
+;; the very left, leaves us with the marks in the left branch, and
+;; occasionally we will want to have the marks instead be the root.
+(define (hoist-left-marks r)
+  (match r
+    [(rope _ (? marks-rope? rl) _ _ _)
+     (replace-right rl (replace-left r (rope-right rl)))]
+    [_ r]))
+
 (define (rope-append rl0 rr0)
-  (cond
-   [(rope-empty? rl0) rr0]
-   [(rope-empty? rr0) rl0]
-   [else
-    (define-values (_l rl) (splay-to rl0 find-position (rope-size rl0)))
-    (define-values (_r rr) (splay-to rr0 find-position 0))
-    ;; Both rl's right and rr's left are (empty-rope).
-    (define pl (rope-piece rl))
-    (define pr (rope-piece rr))
+  (define result
     (cond
-      [(and (marks? pl) (marks? pr))
-       (reindex (rope (merge-marks pl pr) (rope-left rl) (rope-right rr) 0 (seteq)))]
-      [(and (strand? pl) (strand? pr) (strand-maybe-append pl pr)) =>
-       (lambda (t)
-         (reindex (rope t (rope-left rl) (rope-right rr) 0 (seteq))))]
+      [(rope-empty? rl0) rr0]
+      [(rope-empty? rr0) rl0]
       [else
-       (replace-right rl rr)])]))
+       (define-values (_l rl) (splay-to rl0 find-position (rope-size rl0)))
+       (define-values (_r rr1) (splay-to rr0 find-position 0))
+       (define rr (hoist-left-marks rr1))
+       ;; Both rl's right and rr's left are (empty-rope).
+       (define pl (rope-piece rl))
+       (define pr (rope-piece rr))
+       (cond
+         [(and (marks? pl) (marks? pr))
+          (reindex (rope (merge-marks pl pr) (rope-left rl) (rope-right rr) 0 (seteq)))]
+         [(and (strand? pl) (strand? pr) (strand-maybe-append pl pr)) =>
+          (lambda (t)
+            (reindex (rope t (rope-left rl) (rope-right rr) 0 (seteq))))]
+         [else
+          (replace-right rl rr)])]))
+  ;; (check-invariants! #:context (lambda ()
+  ;;                                (define-values (_l rl) (splay-to rl0 find-position (rope-size rl0)))
+  ;;                                (define-values (_r rr) (splay-to rr0 find-position 0))
+  ;;                                (hash 'left (rope->debug-sexp rl)
+  ;;                                      'right (rope->debug-sexp rr)))
+  ;;                    result)
+  result)
 
 (define (rope-concat rs)
   (foldr rope-append (empty-rope) rs))
@@ -539,6 +577,8 @@
             (r "mno" m1 (empty-rope) (empty-rope))
             (r "stu" m1 (empty-rope) (empty-rope))))))
 
+  (check-equal? (rope->string demo-rope) "abcdefghijklmnopqrstu")
+
   (check-equal? (find-all-marks/type demo-rope mtype1)
                 (for/hash ((i '(0 1 3 4 6 7 9 10 12 13 15 16 18 19))) (values i #t)))
   (check-equal? (find-all-marks/type demo-rope mtype2)
@@ -546,12 +586,15 @@
 
   (let ((is '(0 1 3 4 6 7 9 10 12 13 15 16 18 19)))
     (for ((i is))
-      (check-equal? (find-all-marks/type (clear-mark demo-rope mtype1 i) mtype1)
+      (define r (clear-mark demo-rope mtype1 i))
+      (check-equal? (rope->string r) "abcdefghijklmnopqrstu")
+      (check-equal? (find-all-marks/type r mtype1)
                     (for/hash ((j (remove i is))) (values j #t)))))
 
   (let ((is '(3 6 9 12 15 18 21)))
     (for ((i is))
-      (check-equal? (find-all-marks/type (clear-mark demo-rope mtype2 i) mtype2)
+      (define r (clear-mark demo-rope mtype2 i))
+      (check-equal? (find-all-marks/type r mtype2)
                     (for/hash ((j (remove i is))) (values j #t)))))
 
   (let-values (((l r) (rope-split demo-rope 3)))
