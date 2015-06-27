@@ -1,6 +1,9 @@
 #lang racket/base
 ;; Ropes for text editing
 
+;; TODO: split ropes up into rope structure and domain-specific element
+;; structures. Combine/split elements. Arbitrary index structure.
+
 ;; TODO: Consider possible invariant that marks in mark-index should
 ;; fall within [lo,hi).
 
