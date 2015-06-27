@@ -3,6 +3,7 @@
 (provide (struct-out absolute-size)
          (struct-out relative-size)
          (struct-out layout)
+         color-mark
          layout-windows
          render-windows!)
 
@@ -27,7 +28,8 @@
                 left ;; Nat, a column
                 ) #:prefab)
 
-(define (newline? c) (equal? c #\newline))
+;; When present in a rope, associated with a Pen value (see display.rkt)
+(define color-mark (mark-type (buffer-mark-type 'color #f #f) 'right))
 
 ;; Finseth's book defines a C routine, Framer(), which is intended to
 ;; ensure that the `top_of_window` mark, denoting the position where
@@ -70,11 +72,23 @@
   (buffer-mark! buf (window-top win) (caar spans))
   spans)
 
-(define (tty-body-style t is-active?)
-  (tty-set-pen! t tty-default-pen))
-
 (define (tty-statusline-style t is-active?)
   (tty-set-pen! t (pen color-black color-white #f #f)))
+
+(define (render-colored-line t buf sol-pos eol-pos)
+  (define first-color (cond [(buffer-mark* buf color-mark #:forward? #f #:position sol-pos) => cdr]
+                            [else tty-default-pen]))
+  (let loop ((pos sol-pos) (color first-color))
+    (when (< pos eol-pos)
+      (define next-mark (buffer-mark* buf color-mark #:position (+ pos 1)))
+      (define next-pos (if (and next-mark (<= (car next-mark) eol-pos))
+                           (car next-mark)
+                           eol-pos))
+      (define str (rope->string (buffer-region buf pos next-pos)))
+      (tty-set-pen! t color)
+      (tty-display t str)
+      (loop next-pos (if next-mark (cdr next-mark) color))))
+  (tty-newline t))
 
 (define (render-window! t win window-top is-active?)
   (define buf (window-buffer win))
@@ -82,15 +96,13 @@
   (define spans (frame! win available-line-count (window-width win)))
   (define cursor-pos (buffer-mark-pos buf (window-point win)))
   (tty-goto t window-top 0)
-  (tty-body-style t is-active?)
 
   (define (render-span sol-pos eol-pos line-count cursor-coordinates)
-    (define line (rope->string (buffer-region buf sol-pos eol-pos)))
-    (tty-display t line)
-    (tty-newline t)
+    (render-colored-line t buf sol-pos eol-pos)
     (if (<= sol-pos cursor-pos eol-pos)
-        (list (+ line-count window-top)
-              (let ((line-to-cursor (substring line 0 (- cursor-pos sol-pos))))
+        (let* ((line (rope->string (buffer-region buf sol-pos eol-pos)))
+               (line-to-cursor (substring line 0 (- cursor-pos sol-pos))))
+          (list (+ line-count window-top)
                 (buffer-string-column-count buf 0 line-to-cursor)))
         cursor-coordinates))
 
@@ -179,7 +191,6 @@
                          miniwin-height))))
 
 (define (render-windows! t layouts active-window)
-  (tty-body-style t #f)
   (tty-goto t 0 0)
   (define active-cursor-position
     (for/fold [(cursor-position #f)] [(e layouts)]
