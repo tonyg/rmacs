@@ -333,7 +333,7 @@
   (and (rope? r) (strand? (rope-piece r))))
 
 (define (set-mark r0 mtype position value)
-  (define-values (l r) (rope-split r0 position))
+  (define-values (l r) (rope-split (clear-mark r0 mtype position) position))
   (rope-append (rope-append l (single-mark-rope mtype value)) r))
 
 (define (update-marks-rope r p)
@@ -559,8 +559,8 @@
              (define p (rope-piece r))
              (set! stack
                    (if (strand? p)
-                       (list* (rope-left r) p (rope-right r) stack)
-                       (list* (rope-left r)   (rope-right r) stack)))
+                       (list* (rope-left r) p (rope-right r) rest)
+                       (list* (rope-left r)   (rope-right r) rest)))
              (retry)])
           (let ((count (min available (bytes-length bs))))
             (bytes-copy! bs 0 buffer offset (+ offset count))
