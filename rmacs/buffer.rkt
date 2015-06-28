@@ -302,23 +302,31 @@
 (define (buffer-mark* buf mtype
                       #:forward? [forward? #t]
                       #:position [start-pos (if forward? 0 (buffer-size buf))])
-  (find-mark (buffer-rope buf) mtype #:forward? forward? #:position start-pos))
+  (find-mark (buffer-rope buf) mtype
+             #:forward? forward?
+             #:position (->pos buf start-pos 'buffer-mark*)))
 
 (define (buffer-mark buf mtype [what 'buffer-mark]
                      #:forward? [forward? #t]
                      #:position [start-pos (if forward? 0 (buffer-size buf))])
-  (or (buffer-mark* buf mtype #:forward? forward? #:position start-pos)
+  (or (buffer-mark* buf mtype
+                    #:forward? forward?
+                    #:position (->pos buf start-pos 'buffer-mark))
       (error-mark-type-not-found what mtype buf)))
 
 (define (buffer-mark-pos* buf mtype
                           #:forward? [forward? #t]
                           #:position [start-pos (if forward? 0 (buffer-size buf))])
-  (find-mark-pos (buffer-rope buf) mtype #:forward? forward? #:position start-pos))
+  (find-mark-pos (buffer-rope buf) mtype
+                 #:forward? forward?
+                 #:position (->pos buf start-pos 'buffer-mark-pos*)))
 
 (define (buffer-mark-pos buf mtype [what 'buffer-mark-pos]
                          #:forward? [forward? #t]
                          #:position [start-pos (if forward? 0 (buffer-size buf))])
-  (or (buffer-mark-pos* buf mtype #:forward? forward? #:position start-pos)
+  (or (buffer-mark-pos* buf mtype
+                        #:forward? forward?
+                        #:position (->pos buf start-pos 'buffer-mark-pos))
       (error-mark-type-not-found what mtype buf)))
 
 (define (buffer-pos* buf pos-or-mtype)
