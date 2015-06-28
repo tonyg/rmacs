@@ -27,6 +27,9 @@
          editor-request-shutdown!
          editor-force-redisplay!
          editor-sit-for
+         set-editor-event!
+         set-editor-timeout!
+         clear-editor-event!
          clear-message
          message
          start-recursive-edit
@@ -57,7 +60,7 @@
                 [last-command #:mutable] ;; (Option Command)
                 echo-area ;; Buffer
                 mini-window ;; Window
-                [message-expiry-time #:mutable] ;; (Option Number)
+                [active-events #:mutable] ;; (Hash Any Evt)
                 [recursive-edit #:mutable] ;; (Option Buffer)
                 [locals #:mutable] ;; LocalsTable
                 ) #:prefab)
@@ -81,7 +84,7 @@
                     #f ;; last-command
                     echo-area ;; echo-area
                     miniwin ;; mini-window
-                    #f ;; message-expiry-time
+                    (hash) ;; active-events
                     #f ;; recursive-edit
                     (make-locals) ;; locals
                     ))
@@ -277,6 +280,11 @@
 
 (define-simple-command-signature (unbound-key-sequence) #:category event)
 
+(define (editor-background-events editor result-handler)
+  (apply choice-evt
+         (for/list [(e (in-hash-values (editor-active-events editor)))]
+           (handle-evt e result-handler))))
+
 (define (editor-mainloop editor)
   (when (editor-running? editor) (error 'editor-mainloop "Nested mainloop"))
   (set-editor-running?! editor #t)
@@ -296,13 +304,14 @@
                                 (lambda (_)
                                   (loop total-keyseq '() next-handler next-repaint-deadline)))
                     never-evt)
-                (let ((expiry-time (editor-message-expiry-time editor)))
-                  (if expiry-time
-                      (handle-evt (alarm-evt expiry-time)
-                                  (lambda (_)
-                                    (clear-message editor)
-                                    (loop total-keyseq '() next-handler 0)))
-                      never-evt))
+                (editor-background-events editor
+                                          (lambda (wants-repaint?)
+                                            (loop total-keyseq
+                                                  '()
+                                                  next-handler
+                                                  (if wants-repaint?
+                                                      (request-repaint)
+                                                      next-repaint-deadline))))
                 (handle-evt (tty-next-key-evt (editor-tty editor))
                             (lambda (new-key)
                               (define new-input (list new-key))
@@ -348,11 +357,37 @@
 ;; Answers #t if it waited the full length of time.
 (define (editor-sit-for editor seconds)
   (define input-port (tty-input (editor-tty editor)))
+  (define deadline (+ (current-inexact-milliseconds) (* seconds 1000.0)))
+  (define e (choice-evt (handle-evt input-port (lambda (_) #t))
+                        (editor-background-events
+                         editor
+                         (lambda (wants-repaint?) ;; repainting handled by loop structure
+                           'recheck))))
   (define input-available?
-    (or (sync/timeout 0 (handle-evt input-port (lambda (_) #t)))
-        (begin (render-editor! editor)
-               (sync/timeout seconds (handle-evt input-port (lambda (_) #t))))))
+    (let recheck ()
+      (match (sync/timeout 0 e)
+        [#f
+         (render-editor! editor)
+         (define remaining (max 0 (/ (- deadline (current-inexact-milliseconds)) 1000.0)))
+         (match (sync/timeout remaining e)
+           [#f #f]
+           [#t #t]
+           ['recheck (recheck)])]
+        [#t #t]
+        ['recheck (recheck)])))
   (not input-available?))
+
+(define (set-editor-event! editor key e)
+  (set-editor-active-events! editor (hash-set (editor-active-events editor) key e)))
+
+(define (clear-editor-event! editor key)
+  (set-editor-active-events! editor (hash-remove (editor-active-events editor) key)))
+
+(define (set-editor-timeout! editor key delay-ms thunk
+                             #:wants-repaint? [wants-repaint? #t])
+  (set-editor-event! editor key
+                     (handle-evt (alarm-evt (+ (current-inexact-milliseconds) delay-ms))
+                                 (lambda (_) (thunk) wants-repaint?))))
 
 (define (clear-message editor)
   (when (positive? (buffer-size (editor-echo-area editor)))
@@ -360,7 +395,7 @@
     (define re (editor-recursive-edit editor))
     (when (and re (not (eq? (window-buffer (editor-mini-window editor)) re)))
       (set-window-buffer! (editor-mini-window editor) re (buffer-size re)))
-    (set-editor-message-expiry-time! editor #f)
+    (clear-editor-event! editor clear-message)
     (invalidate-layout! editor)))
 
 (define (message #:duration [duration0 #f]
@@ -380,7 +415,8 @@
   (set-window-buffer! (editor-mini-window editor) echo-area (buffer-size echo-area))
   (invalidate-layout! editor)
   (when duration
-    (set-editor-message-expiry-time! editor (+ (current-inexact-milliseconds) (* duration 1000.0))))
+    (set-editor-timeout! editor clear-message (* duration 1000.0)
+                         (lambda () (clear-message editor))))
   (render-editor! editor))
 
 (define (start-recursive-edit editor buf)
