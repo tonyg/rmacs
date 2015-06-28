@@ -41,6 +41,7 @@
          clear-mark
          replace-mark
          clear-all-marks
+         clear-all-marks/type
 
          ;; dump-rope
          )
@@ -373,6 +374,25 @@
                         [left (clear-all-marks (rope-left r))]
                         [right (clear-all-marks (rope-right r))]))))
 
+(define (clear-all-marks/type r mtype)
+  (define (walk r)
+    (if (set-member? (rope-marks r) mtype)
+        (if (marks? (rope-piece r))
+            (let ((new-marks (hash-remove (rope-piece r) mtype)))
+              (if (hash-empty? new-marks)
+                  (rope-append (walk (rope-left r)) (walk (rope-right r)))
+                  (struct-copy rope r
+                               [piece new-marks]
+                               [left (walk (rope-left r))]
+                               [right (walk (rope-right r))]
+                               [marks* (set-remove (rope-marks r) mtype)])))
+            (struct-copy rope r
+                         [left (walk (rope-left r))]
+                         [right (walk (rope-right r))]
+                         [marks* (set-remove (rope-marks r) mtype)]))
+        r))
+  (walk r))
+
 (define (rope-size r)
   (if r (rope-size* r) 0))
 
@@ -621,6 +641,11 @@
                 (for/hash ((i '(0 1 3 4 6 7 9 10 12 13 15 16 18 19))) (values i #t)))
   (check-equal? (find-all-marks/type demo-rope mtype2)
                 (for/hash ((i '(3 6 9 12 15 18 21))) (values i #t)))
+
+  (check-equal? (find-all-marks/type (clear-all-marks/type demo-rope mtype1) mtype1)
+                (hash))
+  (check-equal? (find-all-marks/type (clear-all-marks/type demo-rope mtype2) mtype1)
+                (for/hash ((i '(0 1 3 4 6 7 9 10 12 13 15 16 18 19))) (values i #t)))
 
   (let ((is '(0 1 3 4 6 7 9 10 12 13 15 16 18 19)))
     (for ((i is))

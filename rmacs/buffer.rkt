@@ -46,6 +46,7 @@
          buffer-pos
          buffer-mark!
          buffer-clear-mark!
+         buffer-clear-all-marks/type!
          buffer-move-mark!
          buffer-move-mark-to-start-of-line!
          buffer-move-mark-to-end-of-line!
@@ -347,6 +348,11 @@
   (if pos
       (buffer-lift clear-mark buf mtype pos)
       buf))
+
+(define (buffer-clear-all-marks/type! buf mtype pm1 pm2)
+  (define-values (l _lo m _hi r) (buffer-region-split buf pm1 pm2))
+  (set-buffer-rope! buf (rope-append l (rope-append (clear-all-marks/type m mtype) r)))
+  buf)
 
 (define (buffer-move-mark! buf mtype delta)
   (match-define (cons pos val) (buffer-mark buf mtype 'buffer-move-mark!))
