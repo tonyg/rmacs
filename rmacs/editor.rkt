@@ -94,9 +94,20 @@
   (set-window-status-line?! miniwin #f)
   e)
 
+(define (colorize! editor buf)
+  (local-require "timing.rkt")
+  (when (time* (list 'colorizing (buffer-title buf)) (colorize-burst buf))
+    (set-editor-event! editor
+                       colorize!
+                       (handle-evt always-evt
+                                   (lambda (_)
+                                     (clear-editor-event! editor colorize!)
+                                     (colorize! editor buf)
+                                     #t)))))
+
 (define (configure-fresh-buffer! editor buffer)
   (buffer-apply-modeset! buffer (editor-default-modeset editor))
-  (colorize! buffer)
+  (colorize! editor buffer)
   buffer)
 
 (define (find-buffer editor [title0 #f] #:initial-contents [initial-contents ""])

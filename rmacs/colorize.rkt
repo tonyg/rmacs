@@ -1,6 +1,6 @@
 #lang racket/base
 
-(provide colorize!)
+(provide colorize-burst)
 
 (require racket/match)
 (require syntax-color/module-lexer)
@@ -70,14 +70,3 @@
                   (if (< (- now start-time) 50)
                       (loop new-mode)
                       #t))))))))
-
-(require "timing.rkt")
-
-(define (colorize! buf)
-  (time* (list 'colorizing (buffer-title buf))
-         (let loop ((count 0))
-           (when (colorize-burst buf)
-             ;; (log-info "Performed ~v colorize-steps on buffer ~v" (+ count 1) (buffer-title buf))
-             (loop (+ count 1))))
-         ;; (log-info "Colorization done on buffer ~v" (buffer-title buf))
-         ))
