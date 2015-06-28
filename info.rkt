@@ -1,6 +1,6 @@
 #lang setup/infotab
 (define collection 'multi)
-(define deps '("base" "ansi"
+(define deps '("base" "ansi" "syntax-color-lib"
                ;; this for error reporting (only):
                "web-server-lib"
                ;; plus these, needed for the tests:
