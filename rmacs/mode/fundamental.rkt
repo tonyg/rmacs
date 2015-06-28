@@ -27,9 +27,9 @@
                                  (k sig)
                                  content)))
 
-(define ((read-buffer prompt) ed sig argname k)
+(define ((read-buffer prompt #:default-to-next? [default-to-next? #t]) ed sig argname k)
   (define buf (editor-active-buffer ed))
-  (define default-target (buffer-next buf))
+  (define default-target ((if default-to-next? buffer-next values) buf))
   (completing-read ed
                    (format "~a~a: "
                            prompt
@@ -96,6 +96,8 @@
   (execute-extended-command [signature (read-interactive-signature "M-x ")]))
 (define-simple-command-signature
   (switch-to-buffer [target-buffer (read-buffer "Switch to buffer")]))
+(define-simple-command-signature
+  (kill-buffer [target-buffer (read-buffer "Kill buffer" #:default-to-next? #f)]))
 (define-simple-command-signature (kill-region))
 (define-simple-command-signature (yank))
 (define-simple-command-signature (yank-pop))
@@ -302,6 +304,19 @@
   #:bind-key "C-x b"
   (buffer-reorder! target-buffer)
   (set-window-buffer! win target-buffer))
+
+(define-command fundamental-mode cmd:kill-buffer (target-buffer #:editor ed)
+  #:bind-key "C-x k"
+  (find-buffer ed "*scratch*") ;; side-effect: ensures a scratch buffer exists.
+  (when (> (buffergroup-count (editor-buffers ed)) 1)
+    ;; We don't do anything when there's just one buffer (i.e. the
+    ;; scratch buffer, per side effect above) left, because otherwise
+    ;; we'd be left with no buffers at all, which would leave our
+    ;; windows with nothing to display, etc.
+    (for [(win (windows-for-buffer ed target-buffer))]
+      (when (eq? (window-buffer win) target-buffer)
+        (set-window-buffer! win (buffer-next (window-buffer win)))))
+    (register-buffer! #f target-buffer)))
 
 (define-editor-local kill-ring*)
 (define-command-local kill-command?)

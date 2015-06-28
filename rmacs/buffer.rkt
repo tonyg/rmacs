@@ -6,6 +6,8 @@
          make-buffergroup
          initialize-buffergroup!
          buffergroup-buffer-titles
+         buffergroup-count
+         buffergroup-empty?
          buffer?
          make-buffer
          register-buffer!
@@ -130,6 +132,9 @@
 
 (define (buffergroup-buffer-titles g)
   (map buffer-title (circular-list->list (buffergroup-members g))))
+
+(define (buffergroup-count g) (circular-length (buffergroup-members g)))
+(define (buffergroup-empty? g) (circular-null? (buffergroup-members g)))
 
 (define (initial-contents-rope initial-contents)
   (cond
