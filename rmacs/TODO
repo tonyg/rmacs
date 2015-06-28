@@ -1,3 +1,7 @@
+Bugs in colorizing unicode -- see diff.rkt, which gets color skew
+because of the unicode quotes in the comment block at the top.
+Someone's counting bytes, someone else is counting characters.
+
 Make it reloadable
 
 Catch and handle SIGWINCH.

@@ -45,6 +45,7 @@
 (require "circular-list.rkt")
 (require "file.rkt")
 (require "local.rkt")
+(require "colorize.rkt")
 
 (struct editor (buffers ;; BufferGroup
                 [tty #:mutable] ;; Tty
@@ -92,6 +93,7 @@
 
 (define (configure-fresh-buffer! editor buffer)
   (buffer-apply-modeset! buffer (editor-default-modeset editor))
+  (colorize! buffer)
   buffer)
 
 (define (find-buffer editor [title0 #f] #:initial-contents [initial-contents ""])
