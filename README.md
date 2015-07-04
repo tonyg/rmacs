@@ -2,11 +2,11 @@
 
 An EMACS written in Racket. Runs in ANSI-compatible terminals.
 
-# Instructions
+## Installation instructions
 
 rmacs is still very beta.
 
-## Installing using the Racket package system
+### Installing using the Racket package system
 
 Run
 
@@ -14,7 +14,7 @@ Run
 
 After that, `rmacs` should be on your path.
 
-## Installing from git
+### Installing from git
 
 After cloning the repo, install the
 [racket-ansi](https://github.com/tonyg/racket-ansi) package:
