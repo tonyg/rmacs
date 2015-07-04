@@ -2,6 +2,32 @@
 
 An EMACS written in Racket. Runs in ANSI-compatible terminals.
 
+# Instructions
+
+rmacs is still very beta.
+
+## Installing using the Racket package system
+
+Run
+
+    raco pkg install rmacs
+
+After that, `rmacs` should be on your path.
+
+## Installing from git
+
+After cloning the repo, install the
+[racket-ansi](https://github.com/tonyg/racket-ansi) package:
+
+    raco pkg install ansi
+
+Then, run `make link`, which will install the package from the local
+git working tree.
+
+After `make link` has successfully run once, you don't need to do it
+again; running plain `make` or `raco setup rmacs` will recompile the
+rmacs package in-place.
+
 ## License
 
 Copyright (C) 2011, 2013, 2014, 2015 Tony Garnock-Jones <mailto:tonyg@leastfixedpoint.com>
