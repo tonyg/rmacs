@@ -15,13 +15,13 @@
          completing-read-string=?-hook
          completing-read-completion-hook)
 
-(require racket/string)
 (require "buffer.rkt")
 (require "editor.rkt")
 (require "mode.rkt")
 (require "keys.rkt")
 (require "rope.rkt")
 (require "window.rkt")
+(require "strings.rkt")
 (require "history.rkt")
 
 ;;---------------------------------------------------------------------------

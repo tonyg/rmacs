@@ -6,6 +6,7 @@
 (require racket/match)
 (require racket/string)
 (require "../api.rkt")
+(require "../strings.rkt")
 
 (define fundamental-mode (make-mode "fundamental"))
 
