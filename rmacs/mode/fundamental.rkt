@@ -244,6 +244,7 @@
 (define-command fundamental-mode cmd:beginning-of-buffer
   (#:buffer buf #:window win #:prefix-arg [tenths 0])
   #:bind-key "M-<"
+  #:bind-key "S-M-<"
   #:bind-key "C-<home>"
   #:bind-key "<begin>"
   (if (eq? tenths '#:universal) (set! tenths 0) (set-mark! win))
@@ -252,6 +253,7 @@
 (define-command fundamental-mode cmd:end-of-buffer
   (#:buffer buf #:window win #:prefix-arg [tenths 0])
   #:bind-key "M->"
+  #:bind-key "S-M->"
   #:bind-key "C-<end>"
   (if (eq? tenths '#:universal) (set! tenths 0) (set-mark! win))
   (window-move-to! win (* (buffer-size buf) (- 10 (max 0 (min 10 tenths))) 1/10)))
