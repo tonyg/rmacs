@@ -383,14 +383,21 @@
 ;;---------------------------------------------------------------------------
 ;; Input
 
+(define (has-control-modifier? modifiers)
+  (set-member? modifiers 'control))
+
 (define (tty-next-key tty)
   (define k (ansi:lex-lcd-input (tty-input tty) #:utf-8? (tty-utf-8-input? tty)))
-  (if (equal? k (ansi:key #\[ (set 'control))) ;; ESC
-      (or (sync/timeout 0.5
-                        (handle-evt (tty-next-key-evt tty)
-                                    (lambda (k) (ansi:add-modifier 'meta k))))
-          k)
-      k))
+  (match k
+    [(ansi:key #\tab modifiers) (ansi:key 'tab modifiers)]
+    [(ansi:key #\I (? has-control-modifier? ms)) (ansi:key 'tab (set-remove ms 'control))]
+    [(ansi:key #\M (? has-control-modifier? ms)) (ansi:key 'return (set-remove ms 'control))]
+    [(ansi:key #\[ (? has-control-modifier? ms)) ;; ESC
+     (or (sync/timeout 0.5
+                       (handle-evt (tty-next-key-evt tty)
+                                   (lambda (k) (ansi:add-modifier 'meta k))))
+         (ansi:key 'escape (set-remove ms 'control)))]
+    [_ k]))
 
 (define (tty-next-key-evt tty)
   (handle-evt (tty-input tty)

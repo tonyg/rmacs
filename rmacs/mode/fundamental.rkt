@@ -146,13 +146,12 @@
     [_ #f]))
 
 (define-command fundamental-mode cmd:newline (#:buffer buf #:window win)
-  #:bind-key "C-m"
+  #:bind-key "<return>"
   #:bind-key "C-j"
   (buffer-insert! buf (window-point win) (string->rope "\n")))
 
 (define-command fundamental-mode cmd:indent-for-tab-command (#:buffer buf #:window win)
-  #:bind-key "C-i"
-  #:bind-key "tab"
+  #:bind-key "<tab>"
   (buffer-insert! buf (window-point win) (string->rope "\t")))
 
 (define (plus-n-lines buf pos count)
@@ -290,7 +289,7 @@
   (close-window ed win))
 
 (define-command fundamental-mode cmd:other-window (#:window win #:editor ed)
-  #:bind-key "C-tab"
+  #:bind-key "C-<tab>"
   #:bind-key "C-x o"
   (select-window ed (editor-next-window ed win)))
 

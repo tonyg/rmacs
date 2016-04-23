@@ -60,15 +60,6 @@
      (define mods (parse-modifiers modifiers lexeme))
      (cons (key (string->symbol symname) mods)
            (parse-key-sequence rest))]
-    [(pregexp "^ *(([cCsSmM]-)*)(?i:esc)(( +.*)|$)" (list lexeme modifiers _ rest _))
-     (define mods (parse-modifiers modifiers lexeme))
-     (cons (key #\[ (set-add mods 'control)) (parse-key-sequence rest))]
-    [(pregexp "^ *(([cCsSmM]-)*)(?i:ret)(( +.*)|$)" (list lexeme modifiers _ rest _))
-     (define mods (parse-modifiers modifiers lexeme))
-     (cons (key #\M (set-add mods 'control)) (parse-key-sequence rest))]
-    [(pregexp "^ *(([cCsSmM]-)*)(?i:tab)(( +.*)|$)" (list lexeme modifiers _ rest _))
-     (define mods (parse-modifiers modifiers lexeme))
-     (cons (key #\I (set-add mods 'control)) (parse-key-sequence rest))]
     [(pregexp "^ *(([cCsSmM]-)*)([^ ]+)(( +.*)|$)" (list lexeme modifiers _ keystr rest _))
      (define mods (parse-modifiers modifiers lexeme))
      (define keychar (or (read-string-to-end (format "#\\~a" keystr))
@@ -115,12 +106,6 @@
           (values (substring s 1 (string-length s)) modifiers)]
          [(? symbol? s)
           (values (format "<~a>" s) modifiers)]
-         [#\[ #:when (set-member? modifiers 'control)
-          (values "ESC" (set-remove modifiers 'control))]
-         [#\M #:when (set-member? modifiers 'control)
-          (values "RET" (set-remove modifiers 'control))]
-         [#\I #:when (set-member? modifiers 'control)
-          (values "TAB" (set-remove modifiers 'control))]
          [(? char? c)
           (define s (format "~v" c))
           (define maybe-downcase (if (set-member? modifiers 'control) string-downcase values))
@@ -202,20 +187,6 @@
   (check-equal? (parse-key-sequence ">") (list (key #\> (set))))
   (check-equal? (parse-key-sequence "#:default #:default")
                 (list '#:default '#:default))
-  (check-equal? (parse-key-sequence "esc ESC ret RET tab TAB")
-                (list (key #\[ (set 'control))
-                      (key #\[ (set 'control))
-                      (key #\M (set 'control))
-                      (key #\M (set 'control))
-                      (key #\I (set 'control))
-                      (key #\I (set 'control))))
-  (check-equal? (keyseq->keyspec (list (key #\[ (set 'control))
-                                       (key #\[ (set 'control))
-                                       (key #\M (set 'control))
-                                       (key #\M (set 'control))
-                                       (key #\I (set 'control))
-                                       (key #\I (set 'control))))
-                "ESC ESC RET RET TAB TAB")
 
   (define km (keymap-bind* (empty-keymap) (list (list "C-x o" 'other-window)
                                                 (list "C-x 2" 'split-window)

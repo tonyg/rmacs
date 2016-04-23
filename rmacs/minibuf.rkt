@@ -126,7 +126,7 @@
                          #:notify? notify?))
 
 (define-command recursive-edit-mode cmd:exit-minibuffer (#:buffer buf #:editor ed)
-  #:bind-key "C-m"
+  #:bind-key "<return>"
   #:bind-key "C-j"
   (define result (recursive-edit-contents buf))
   (when ((recursive-edit-acceptable-hook buf) result)
@@ -230,8 +230,7 @@
 (define-simple-command-signature (minibuffer-complete))
 
 (define-command completing-read-mode cmd:minibuffer-complete (#:buffer buf #:editor ed)
-  #:bind-key "C-i"
-  #:bind-key "tab"
+  #:bind-key "<tab>"
   (define string=? (completing-read-string=?-hook buf))
   (define prefix (recursive-edit-contents buf))
   (define completions ((completing-read-completion-hook buf) prefix string=?))
