@@ -152,6 +152,7 @@
 
 (define-command fundamental-mode cmd:indent-for-tab-command (#:buffer buf #:window win)
   #:bind-key "C-i"
+  #:bind-key "tab"
   (buffer-insert! buf (window-point win) (string->rope "\t")))
 
 (define (plus-n-lines buf pos count)
