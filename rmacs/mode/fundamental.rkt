@@ -482,6 +482,7 @@
 
 (define-command fundamental-mode cmd:undo (#:command cmd #:buffer buf #:window win #:editor ed)
   #:bind-key "C-_"
+  #:bind-key "C-S-_"
   #:bind-key "C-/"
   #:bind-key "C-x u"
   (define actions (or (repeated-undo-list (editor-last-command ed)) (undo-list buf)))
