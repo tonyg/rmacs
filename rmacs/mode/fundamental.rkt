@@ -8,7 +8,10 @@
 (require "../api.rkt")
 (require "../strings.rkt")
 
-(define fundamental-mode (make-mode "fundamental"))
+(define fundamental-mode
+  (mode-add-constraints (make-mode "fundamental")
+                        #:dispatch-keys-after '(#:minibuf)
+                        #:interpret-commands-after '(#:minibuf)))
 
 (define ((read-interactive-signature prompt) ed meta-sig meta-argname k)
   (define buf (editor-active-buffer ed))

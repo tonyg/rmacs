@@ -91,7 +91,10 @@
                                                                 #t)
                                               'left))
 
-(define recursive-edit-mode (make-mode "recursive-edit"))
+(define recursive-edit-mode
+  (mode-add-constraints (make-mode "recursive-edit")
+                        #:dispatch-keys-before '(#:minibuf)
+                        #:interpret-commands-before '(#:minibuf)))
 
 (define-buffer-local recursive-edit-selected-window)
 (define-buffer-local recursive-edit-history)
@@ -202,7 +205,10 @@
   (lambda (prefix string=?)
     (for/list ((c collection-strings) #:when (string-prefix? prefix c string=?)) c)))
 
-(define completing-read-mode (make-mode "completing"))
+(define completing-read-mode
+  (mode-add-constraints (make-mode "completing")
+                        #:dispatch-keys-before (list '#:minibuf recursive-edit-mode)
+                        #:interpret-commands-before (list '#:minibuf recursive-edit-mode)))
 
 (define-buffer-local completing-read-string=?-hook
   string=?)
