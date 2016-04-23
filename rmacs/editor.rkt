@@ -467,6 +467,7 @@
 
 (define-command kernel-mode cmd:force-redisplay (#:editor ed)
   #:bind-key "C-l"
+  #:bind-key "<window-resize>"
   (editor-force-redisplay! ed))
 
 (define-command kernel-mode cmd:keyboard-quit ()
