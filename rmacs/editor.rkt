@@ -41,7 +41,7 @@
 (require "buffer.rkt")
 (require "display.rkt")
 (require "display-terminal.rkt")
-(require "display-gui.rkt")
+(require "display-gui-check.rkt")
 (require "window.rkt")
 (require "render.rkt")
 (require "mode.rkt")
