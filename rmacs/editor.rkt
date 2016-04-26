@@ -40,6 +40,8 @@
 
 (require "buffer.rkt")
 (require "display.rkt")
+(require "display-terminal.rkt")
+(require "display-gui.rkt")
 (require "window.rkt")
 (require "render.rkt")
 (require "mode.rkt")
@@ -65,7 +67,7 @@
                 [locals #:mutable] ;; LocalsTable
                 ) #:prefab)
 
-(define (make-editor #:tty [tty (stdin-tty)]
+(define (make-editor #:tty [tty (default-tty)]
                      #:default-modeset [default-modeset (make-modeset)])
   (define g (make-buffergroup))
   (define scratch (make-buffer g "*scratch*"
@@ -367,13 +369,17 @@
 
 ;; Answers #t if it waited the full length of time.
 (define (editor-sit-for editor seconds)
-  (define input-port (tty-input (editor-tty editor)))
   (define deadline (+ (current-inexact-milliseconds) (* seconds 1000.0)))
-  (define e (choice-evt (handle-evt input-port (lambda (_) #t))
+
+  ;; It is safe to use e (which includes tty-input-available-evt) more
+  ;; than once but ONLY because we do not actually read any input from
+  ;; the tty between uses.
+  (define e (choice-evt (tty-input-available-evt (editor-tty editor))
                         (editor-background-events
                          editor
                          (lambda (wants-repaint?) ;; repainting handled by loop structure
                            'recheck))))
+
   (define input-available?
     (let recheck ()
       (match (sync/timeout 0 e)
