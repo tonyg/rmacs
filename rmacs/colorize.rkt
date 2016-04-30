@@ -16,6 +16,7 @@
 
 (define colors
   (hash 'comment (pen color-red color-black #f #t)
+        'sexp-comment (pen color-red color-black #f #t)
         'white-space tty-default-pen
         'symbol tty-default-pen
         'string (pen color-yellow color-black #f #f)
