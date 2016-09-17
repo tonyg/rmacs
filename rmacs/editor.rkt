@@ -327,12 +327,13 @@
                                                       next-repaint-deadline))))
                 (handle-evt (tty-next-key-evt (editor-tty editor))
                             (lambda (new-key)
-                              (define new-input (list new-key))
-                              (clear-message editor)
-                              (loop (append total-keyseq new-input)
-                                    new-input
-                                    next-handler
-                                    next-repaint-deadline))))))
+                              (cond [(not new-key) (wait-for-input next-handler)]
+                                    [else (define new-input (list new-key))
+                                          (clear-message editor)
+                                          (loop (append total-keyseq new-input)
+                                                new-input
+                                                next-handler
+                                                next-repaint-deadline)]))))))
       (cond
        [(and next-repaint-deadline (>= (current-inexact-milliseconds) next-repaint-deadline))
         (render-editor! editor)

@@ -5,6 +5,7 @@
 (require racket/match)
 (require (only-in racket/vector vector-copy))
 (require (prefix-in ansi: ansi))
+(require unix-signals)
 (require "display.rkt")
 (require "diff.rkt")
 
@@ -29,6 +30,7 @@
 (define *stdin-tty* #f)
 (define (stdin-tty)
   (when (not *stdin-tty*)
+    (capture-signal! 'SIGWINCH)
     (ansi:tty-raw!)
     (set! *stdin-tty*
           (terminal
@@ -263,7 +265,11 @@
     [_ k]))
 
 (define (terminal-next-key-evt tty)
-  (handle-evt (terminal-input tty)
-              (lambda (_) (terminal-next-key tty))))
+  (choice-evt (handle-evt next-signal-evt
+                          (lambda (signal-number)
+                            (and (eq? (lookup-signal-name signal-number) 'SIGWINCH)
+                                 (key 'window-resize (set)))))
+              (handle-evt (terminal-input tty)
+                          (lambda (_) (terminal-next-key tty)))))
 
 (register-tty-backend! 'terminal stdin-tty)
