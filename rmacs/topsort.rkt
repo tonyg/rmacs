@@ -50,5 +50,13 @@
   (check-equal? (topsort '((1 0) (0 1))) #f)
   (check-equal? (topsort '((1 2) (1 3) (3 2) (3 4) (4 0) (0 1))) #f)
   (check-equal? (topsort '((1 2) (1 3) (3 2) (3 4) (4 1) (0 1))) #f)
-  (check-equal? (topsort '((1 2) (1 3) (3 2) (3 4) (0 1))) '(0 1 3 4 2)) ;; others also valid
+
+  (define (topsort-output-correct? input)
+    (define output (topsort input))
+    (for/and [(edge (in-list input))]
+      (match-define (list src dst) edge)
+      (positive? (- (length (member src output))
+                    (length (member dst output))))))
+
+  (check-true (topsort-output-correct? '((1 2) (1 3) (3 2) (3 4) (0 1))))
   )
