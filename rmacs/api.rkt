@@ -6,6 +6,7 @@
 (require "buffer.rkt")
 (require "keys.rkt")
 (require "rope.rkt")
+(require "mark.rkt")
 (require "window.rkt")
 (require "minibuf.rkt")
 (require "local.rkt")
@@ -20,6 +21,7 @@
                        "buffer.rkt"
                        "keys.rkt"
                        "rope.rkt"
+                       "mark.rkt"
                        "window.rkt"
                        "minibuf.rkt"
                        "local.rkt"

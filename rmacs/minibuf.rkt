@@ -20,6 +20,7 @@
 (require "mode.rkt")
 (require "keys.rkt")
 (require "rope.rkt")
+(require "mark.rkt")
 (require "window.rkt")
 (require "strings.rkt")
 (require "history.rkt")
@@ -39,7 +40,7 @@
   (define buf (make-buffer #f "*minibuf*"))
   (configure-fresh-buffer! editor buf)
   (buffer-add-mode! buf recursive-edit-mode)
-  (buffer-replace-contents! buf (string->rope prompt))
+  (buffer-replace-contents! buf (piece->rope prompt))
   (buffer-mark! buf recursive-edit-field-start (buffer-size buf))
   (set-recursive-edit-contents! buf initial)
   (recursive-edit-selected-window buf (editor-active-window editor))
@@ -118,11 +119,11 @@
   ((recursive-edit-cancel-hook buf)))
 
 (define (recursive-edit-contents buf)
-  (rope->string (buffer-region buf recursive-edit-field-start (buffer-size buf))))
+  (rope->searchable-string (buffer-region buf recursive-edit-field-start (buffer-size buf))))
 
 (define (set-recursive-edit-contents! buf str #:notify? [notify? #t])
   (buffer-region-update! buf recursive-edit-field-start (buffer-size buf)
-                         (lambda (_old) (string->rope str))
+                         (lambda (_old) (piece->rope str))
                          #:notify? notify?))
 
 (define-command recursive-edit-mode cmd:exit-minibuffer (#:buffer buf #:editor ed)
@@ -247,5 +248,5 @@
                                    recursive-edit-field-start
                                    (buffer-size buf)
                                    (lambda (_old)
-                                     (string->rope common-prefix)))))
+                                     (piece->rope common-prefix)))))
       (message ed "No match")))

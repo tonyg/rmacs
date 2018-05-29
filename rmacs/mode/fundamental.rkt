@@ -129,7 +129,7 @@
     [(list (key (? char? ch) modifiers)) #:when (set-empty? (set-remove modifiers 'shift))
      (buffer-insert! (command-buffer cmd)
                      (window-point (command-window cmd))
-                     (string->rope (string ch)))]
+                     (piece->rope (string ch)))]
     [_ #f]))
 
 (define-command fundamental-mode cmd:unbound-key-sequence (#:command cmd)
@@ -139,20 +139,20 @@
   #:bind-key "C-q #:default"
   (match keyseq
     [(list _ (key (? char? ch) modifiers)) #:when (set-empty? (set-remove modifiers 'shift))
-     (buffer-insert! buf (window-point win) (string->rope (string ch)))]
+     (buffer-insert! buf (window-point win) (piece->rope (string ch)))]
     [(list _ (key (? char? ch0) modifiers)) #:when (equal? modifiers (set 'control))
      (define ch (integer->char (- (char->integer (char-upcase ch0)) (char->integer #\A) -1)))
-     (buffer-insert! buf (window-point win) (string->rope (string ch)))]
+     (buffer-insert! buf (window-point win) (piece->rope (string ch)))]
     [_ #f]))
 
 (define-command fundamental-mode cmd:newline (#:buffer buf #:window win)
   #:bind-key "<return>"
   #:bind-key "C-j"
-  (buffer-insert! buf (window-point win) (string->rope "\n")))
+  (buffer-insert! buf (window-point win) (piece->rope "\n")))
 
 (define-command fundamental-mode cmd:indent-for-tab-command (#:buffer buf #:window win)
   #:bind-key "<tab>"
-  (buffer-insert! buf (window-point win) (string->rope "\t")))
+  (buffer-insert! buf (window-point win) (piece->rope "\t")))
 
 (define (plus-n-lines buf pos count)
   (for/fold [(pos pos)] [(i (in-range count))] (+ (buffer-end-of-line buf pos) 1)))
@@ -230,14 +230,14 @@
   #:bind-key "<backspace>"
   #:bind-key "C-h" ;; differs from GNU emacs
   (define pos (buffer-mark-pos buf (window-point win)))
-  (buffer-region-update! buf (- pos 1) pos (lambda (_deleted) (empty-rope))))
+  (buffer-region-update! buf (- pos 1) pos (lambda (_deleted) (rope-empty))))
 
 (define-command fundamental-mode cmd:delete-forward-char
   (#:buffer buf #:window win #:prefix-arg [count 1])
   #:bind-key "<delete>"
   #:bind-key "C-d"
   (define pos (buffer-mark-pos buf (window-point win)))
-  (buffer-region-update! buf pos (+ pos 1) (lambda (_deleted) (empty-rope))))
+  (buffer-region-update! buf pos (+ pos 1) (lambda (_deleted) (rope-empty))))
 
 (define (set-mark! win [pos (window-point win)] #:noisy? [noisy? #t])
   (buffer-mark! (window-buffer win) region-mark pos)
@@ -344,7 +344,7 @@
 (define (kill-region! cmd ed buf pm1 pm2)
   (buffer-region-update! buf pm1 pm2 (lambda (region)
                                        (copy-region-as-kill! cmd ed region)
-                                       (empty-rope))))
+                                       (rope-empty))))
 
 (define (yank! ed buf pm #:index [index 0])
   (define region (ring-ref (kill-ring ed) index))
@@ -402,7 +402,7 @@
       (let-values (((lo hi) (if (< point mark)
                                 (values (- mark 40) mark)
                                 (values mark (+ mark 40)))))
-        (define snippet (rope->string (buffer-region buf lo hi)))
+        (define snippet (rope->searchable-string (buffer-region buf lo hi)))
         (message ed "Saved text ~a \"~a\"" (if (< point mark) "until" "from") snippet))))
 
 (define-command fundamental-mode cmd:kill-line

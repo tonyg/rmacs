@@ -14,6 +14,7 @@
 
 (require "buffer.rkt")
 (require "rope.rkt")
+(require "mark.rkt")
 
 (struct window (id ;; Symbol
                 top ;; MarkType

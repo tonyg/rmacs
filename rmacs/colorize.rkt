@@ -6,6 +6,7 @@
 (require syntax-color/module-lexer)
 (require syntax-color/lexer-contract)
 (require "rope.rkt")
+(require "mark.rkt")
 (require "buffer.rkt")
 (require "render.rkt")
 (require "display.rkt")
@@ -36,7 +37,7 @@
       [#f (values 0 (colorization-state #f))]
       [(cons pos s) (values pos s)]))
   (define-values (_l r) (rope-split (buffer-rope buf) start-pos))
-  (define in (open-input-rope r))
+  (define in (rope->searchable-port r))
   (define start-time (current-inexact-milliseconds))
   (let loop ((mode mode))
     (define-values (lexeme type data new-token-start new-token-end backup-delta new-mode)

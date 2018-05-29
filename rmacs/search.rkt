@@ -4,12 +4,15 @@
 (provide search-generator
          search-string
          search-rope
+
+         ;; Warning: these don't act like `findf`, quite.
          findf-in-generator
          findf-in-rope)
 
 (require racket/set)
 (require racket/match)
 (require "rope.rkt")
+(require "rope/string.rkt")
 
 (define (table pattern)
   (define limit (- (string-length pattern) 1))
@@ -78,11 +81,12 @@
 ;; String Rope -> (Option Index)
 (define (search-rope needle haystack #:forward? [forward? #t])
   (if forward?
-      (search-generator needle (rope-generator haystack))
-      (let ((reversed-result (search-generator (list->string (reverse (string->list needle)))
-                                               (rope-generator haystack #:forward? #f))))
+      (search-generator needle (rope->searchable-generator haystack))
+      (let ((reversed-result (search-generator (naive-string-reverse needle)
+                                               (rope->searchable-generator haystack #:forward? #f))))
         (and reversed-result (- (rope-size haystack) reversed-result (string-length needle))))))
 
+;; Returns the index where `f` first yields `#t`, OR the total number of elements in `gen`.
 (define (findf-in-generator f gen)
   (let loop ((count 0))
     (match (gen)
@@ -94,8 +98,8 @@
 
 (define (findf-in-rope f r #:forward? [forward? #t])
   (if forward?
-      (findf-in-generator f (rope-generator r))
-      (- (rope-size r) (findf-in-generator f (rope-generator r #:forward? #f)))))
+      (findf-in-generator f (rope->searchable-generator r))
+      (- (rope-size r) (findf-in-generator f (rope->searchable-generator r #:forward? #f)))))
 
 (module+ test
   (require rackunit)
@@ -112,7 +116,7 @@
 
   (define prejudice-rope
     (rope-concat
-     (map string->rope
+     (map piece->rope
           (list "It is a truth universally acknowledged, that a single man in possession of a good fortune must be in want of a wife.\n"
                 "\n"
                 "However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered as the rightful property of some one or other of their daughters.\n"
@@ -128,6 +132,16 @@
   (check-equal? (search-rope "man may" prejudice-rope #:forward? #f) 171)
   (check-equal? (search-rope "xylophone" prejudice-rope) #f)
   (check-equal? (search-rope "xylophone" prejudice-rope #:forward? #f) #f)
+
+  (let ((g (rope->searchable-generator prejudice-rope)))
+    (check-equal? (search-generator "man may " g) 171)
+    (check-equal? (g) #\b)
+    (check-equal? (g) #\e))
+
+  (let ((g (rope->searchable-generator prejudice-rope)))
+    (check-equal? (search-generator "xylophone" g) #f)
+    (check-equal? (g) #f)
+    (check-equal? (g) #f))
 
   (define (find-in-rope delims r #:forward? [forward? #t])
     (define chs (list->set (string->list delims)))

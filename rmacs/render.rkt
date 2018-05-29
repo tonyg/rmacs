@@ -13,6 +13,7 @@
 (require "window.rkt")
 (require "display.rkt")
 (require "rope.rkt")
+(require "mark.rkt")
 (require "wrap.rkt")
 
 ;; A SizeSpec is either
@@ -84,7 +85,7 @@
       (define next-pos (if (and next-mark (<= (car next-mark) eol-pos))
                            (car next-mark)
                            eol-pos))
-      (define str (rope->string (buffer-region buf pos next-pos)))
+      (define str (rope->searchable-string (buffer-region buf pos next-pos)))
       (tty-set-pen! t color)
       (tty-display t str)
       (loop next-pos (if next-mark (cdr next-mark) color))))
@@ -100,7 +101,7 @@
   (define (render-span sol-pos eol-pos line-count cursor-coordinates)
     (render-colored-line t buf sol-pos eol-pos)
     (if (<= sol-pos cursor-pos eol-pos)
-        (let* ((line (rope->string (buffer-region buf sol-pos eol-pos)))
+        (let* ((line (rope->searchable-string (buffer-region buf sol-pos eol-pos)))
                (line-to-cursor (substring line 0 (- cursor-pos sol-pos))))
           (list (+ line-count window-top)
                 (buffer-string-column-count buf 0 line-to-cursor)))

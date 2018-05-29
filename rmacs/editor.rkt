@@ -288,7 +288,7 @@
   (set! *error-count* (+ *error-count* 1))
   (when (>= *error-count* 3) (exit))
   (define b (find-buffer editor "*Error*"))
-  (buffer-replace-contents! b (string->rope error-report))
+  (buffer-replace-contents! b (piece->rope error-report))
   (open-window editor b))
 
 (define-simple-command-signature (unbound-key-sequence) #:category event)
@@ -409,7 +409,7 @@
 
 (define (clear-message editor)
   (when (positive? (buffer-size (editor-echo-area editor)))
-    (buffer-replace-contents! (editor-echo-area editor) (empty-rope))
+    (buffer-replace-contents! (editor-echo-area editor) (rope-empty))
     (define re (editor-recursive-edit editor))
     (when (and re (not (eq? (window-buffer (editor-mini-window editor)) re)))
       (set-window-buffer! (editor-mini-window editor) re (buffer-size re)))
@@ -420,14 +420,14 @@
                  #:log? [log? #t]
                  editor fmt . args)
   (define duration (or duration0 (and (editor-recursive-edit editor) 2)))
-  (define msg (string->rope (apply format fmt args)))
+  (define msg (piece->rope (apply format fmt args)))
   (define echo-area (editor-echo-area editor))
   (when log?
     (let* ((msgbuf (find-buffer editor "*Messages*"))
            (msgwins (filter (lambda (w) (equal? (buffer-mark-pos msgbuf (window-point w))
                                                 (buffer-size msgbuf)))
                             (windows-for-buffer editor msgbuf))))
-      (buffer-insert! msgbuf (buffer-size msgbuf) (rope-append msg (string->rope "\n")))
+      (buffer-insert! msgbuf (buffer-size msgbuf) (rope-append msg (piece->rope "\n")))
       (for ((w msgwins)) (buffer-mark! msgbuf (window-point w) (buffer-size msgbuf)))))
   (buffer-replace-contents! echo-area msg)
   (set-window-buffer! (editor-mini-window editor) echo-area (buffer-size echo-area))

@@ -81,6 +81,7 @@
 (require (only-in racket/file file->string))
 
 (require "rope.rkt")
+(require "mark.rkt")
 (require "search.rkt")
 (require "circular-list.rkt")
 (require "mode.rkt")
@@ -138,7 +139,7 @@
 
 (define (initial-contents-rope initial-contents)
   (cond
-   [(string? initial-contents) (string->rope initial-contents)]
+   [(string? initial-contents) (piece->rope initial-contents)]
    [(rope? initial-contents) initial-contents]
    [(procedure? initial-contents) (initial-contents-rope (initial-contents))]
    [else (error 'initial-contents-rope "Invalid initial-contents: ~v" initial-contents)]))
@@ -210,11 +211,11 @@
   b)
 
 (define (revert-buffer! buf)
-  (buffer-replace-contents! buf (string->rope (buffer-source-read (buffer-source buf))))
+  (buffer-replace-contents! buf (piece->rope (buffer-source-read (buffer-source buf))))
   (mark-buffer-clean! buf))
 
 (define (save-buffer! buf)
-  (buffer-source-write (buffer-source buf) (rope->string (buffer-rope buf)))
+  (buffer-source-write (buffer-source buf) (rope->searchable-string (buffer-rope buf)))
   (mark-buffer-clean! buf))
 
 (define (buffer-rename! b new-title)
@@ -253,11 +254,11 @@
 
 (define (buffer-column buf pos-or-mtype)
   (define pos (->pos buf pos-or-mtype 'buffer-column))
-  (define str (rope->string (buffer-region buf (buffer-start-of-line buf pos) pos)))
+  (define str (rope->searchable-string (buffer-region buf (buffer-start-of-line buf pos) pos)))
   (buffer-string-column-count buf 0 str))
 
 (define (buffer-closest-pos-for-column buf sol-pos column-offset column)
-  (define g (rope-generator (subrope (buffer-rope buf) sol-pos)))
+  (define g (rope->searchable-generator (subrope (buffer-rope buf) sol-pos)))
   (let loop ((column-count column-offset) (pos sol-pos))
     (cond
      [(< column-count column)
@@ -308,9 +309,9 @@
 (define (buffer-mark* buf mtype
                       #:forward? [forward? #t]
                       #:position [start-pos (if forward? 0 (buffer-size buf))])
-  (find-mark (buffer-rope buf) mtype
-             #:forward? forward?
-             #:position (->pos buf start-pos 'buffer-mark*)))
+  (find-in-index (buffer-rope buf) mtype
+                 #:forward? forward?
+                 #:position (->pos buf start-pos 'buffer-mark*)))
 
 (define (buffer-mark buf mtype [what 'buffer-mark]
                      #:forward? [forward? #t]
@@ -323,9 +324,9 @@
 (define (buffer-mark-pos* buf mtype
                           #:forward? [forward? #t]
                           #:position [start-pos (if forward? 0 (buffer-size buf))])
-  (find-mark-pos (buffer-rope buf) mtype
-                 #:forward? forward?
-                 #:position (->pos buf start-pos 'buffer-mark-pos*)))
+  (find-pos-in-index (buffer-rope buf) mtype
+                     #:forward? forward?
+                     #:position (->pos buf start-pos 'buffer-mark-pos*)))
 
 (define (buffer-mark-pos buf mtype [what 'buffer-mark-pos]
                          #:forward? [forward? #t]
@@ -399,8 +400,8 @@
 (define-simple-command-signature
   (buffer-changed [was-dirty? (const-arg #f)]
                   [pos (const-arg 0)]
-                  [old-content (const-arg (empty-rope))]
-                  [new-content (const-arg (empty-rope))])
+                  [old-content (const-arg (rope-empty))]
+                  [new-content (const-arg (rope-empty))])
   #:category event)
 
 (define (send-edit-notification! buf was-dirty? pos old-content new-content)
@@ -422,7 +423,7 @@
   (set-buffer-rope! buf (rope-append (rope-append l content-rope) r))
   (define old-dirty (buffer-dirty? buf))
   (when (buffer-source buf) (set-buffer-dirty?! buf #t))
-  (when notify? (send-edit-notification! buf old-dirty pos (empty-rope) content-rope))
+  (when notify? (send-edit-notification! buf old-dirty pos (rope-empty) content-rope))
   buf)
 
 (define (buffer-replace-contents! buf content-rope)
@@ -455,7 +456,7 @@
 (define (buffer-search-regexp buf start-pos-or-mtype pattern)
   (buffer-search* buf start-pos-or-mtype #t
                   (lambda (piece)
-                    (define p (open-input-rope piece #:name (buffer-title buf)))
+                    (define p (rope->searchable-port piece #:name (buffer-title buf)))
                     (match (regexp-match-positions pattern p)
                       [#f #f]
                       [(cons (cons lo hi) _)
@@ -463,7 +464,7 @@
                        ;; but we need CODEPOINT offsets. Reread,
                        ;; count, and discard the portion of the buffer
                        ;; leading up to the match.
-                       (define p (open-input-rope piece #:name (buffer-title buf)))
+                       (define p (rope->searchable-port piece #:name (buffer-title buf)))
                        (define prefix-len
                          (string-length (bytes->string/utf-8 (read-bytes lo p))))
                        (define match-len
