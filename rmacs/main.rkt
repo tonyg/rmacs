@@ -25,7 +25,8 @@
     (error 'rmacs
            "Cannot run with TERM=~a; terminal lacks essential features."
            (getenv "TERM")))
-  (void
+  (local-require profile)
+  (void #;profile
    (rmacs #:initial-files (match (current-command-line-arguments)
                             ['#()
                              (list
@@ -33,11 +34,4 @@
                                           'up 'up "doc" "xterm_controls.txt"))]
                             [(vector files ...)
                              files])))
-  ;; (require profile)
-  ;; (require ansi)
-  ;; (void (profile-thunk (lambda () (begin0 (main)
-  ;;                                   (tty-restore!)
-  ;;                                   (display (select-graphic-rendition style-normal))
-  ;;                                   (display (clear-screen))
-  ;;                                   (flush-output)))))
   )
