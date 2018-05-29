@@ -467,6 +467,7 @@
 (define-simple-command-signature (force-redisplay))
 (define-simple-command-signature (keyboard-quit))
 (define-simple-command-signature (dump-buffer-to-stderr))
+(define-simple-command-signature (version))
 
 (define-command kernel-mode cmd:save-buffers-kill-terminal (#:editor ed)
   #:bind-key "C-x C-c"
@@ -514,3 +515,10 @@
             (for/list ((e (circular-list->list (editor-windows ed))))
               (list (window-id (car e)) (cadr e))))
   (log-info "--------------------------------------------------------------------------------"))
+
+(define-command kernel-mode cmd:version (#:window win)
+  (collect-garbage)
+  (message (window-editor win)
+           (format "Racket version ~a; memory usage ~a bytes"
+                   (version)
+                   (current-memory-use))))
