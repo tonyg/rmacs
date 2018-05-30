@@ -218,7 +218,7 @@
       ['() #f]
       [(cons (cons pos value) _) (cons (+ offset (rope-lo r) pos) value)]))
   (define (search r offset start-pos)
-    (and r
+    (and (not (rope-empty? r))
          (index-contains? (rope-index r) key)
          (let-values (((lo hi) (rope-lo+hi r)))
            (if forward?
@@ -258,10 +258,11 @@
 
 (define (rope-map r f)
   (let walk ((r r))
-    (and r
-         (rope-append (walk (rope-left r))
-                      (rope-append (piece->rope (f (rope-piece r)))
-                                   (walk (rope-right r)))))))
+    (if (rope-empty? r)
+        r
+        (rope-append (walk (rope-left r))
+                     (rope-append (piece->rope (f (rope-piece r)))
+                                  (walk (rope-right r)))))))
 
 (define (rope-map/key r key f)
   (let walk ((r r))
