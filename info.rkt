@@ -3,6 +3,7 @@
 (define deps '("base" "ansi" "syntax-color-lib"
                "gui-lib"
                "unix-signals"
+               "diff-merge"
                ;; this for error reporting (only):
                "web-server-lib"
                ;; plus these, needed for the tests:

@@ -9,7 +9,7 @@
 (require (prefix-in ansi: ansi))
 (require unix-signals)
 (require "display.rkt")
-(require "diff.rkt")
+(require diff-merge/diff)
 
 (struct terminal (input ;; InputPort
                   output ;; OutputPort
@@ -206,6 +206,25 @@
           (+ empty-count 1))))
   (when (and (positive? trailing-empty-count) (= (+ first-col cell-count) (tty-columns tty)))
     (output tty (ansi:clear-to-eol))))
+
+;; patch-indices is a result from a call to diff-indices
+(define (apply-patch! patch-indices ;; DiffIndices
+                      remove-elements! ;; Nat Nat -> Void
+                      insert-elements! ;; Nat Nat Nat -> Void
+                      )
+  (for/fold [(skew 0)] [(patch patch-indices)]
+    (match-define (difference old-i old-n new-i new-n) patch)
+    (define delta (- new-n old-n))
+    (if (negative? delta)
+        (begin (remove-elements! (+ old-i skew) (- delta))
+               (+ skew delta))
+        skew))
+  (for/fold [(skew 0)] [(patch patch-indices)]
+    (match-define (difference old-i old-n new-i new-n) patch)
+    (define delta (- new-n old-n))
+    (insert-elements! (+ old-i skew) (max 0 delta) new-n)
+    (+ skew delta))
+  (void))
 
 (define (repair-line! tty old new row)
   (define columns (screen-columns new))
