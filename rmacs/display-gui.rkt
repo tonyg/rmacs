@@ -26,6 +26,7 @@
 
 (define (gui-factory)
   (and (or (eq? (system-type) 'macosx)
+	   (eq? (system-type) 'windows)
            (getenv "DISPLAY"))
        (not (getenv "RMACS_NO_GUI"))
        (gui-factory*)))
@@ -90,9 +91,13 @@
     g))
 
 (define (mkf bold? italic?)
-  (make-object font% 14 "Inconsolata" 'default
+  (define size (if (eq? (system-type) 'windows) 11 14))
+  (define name (if (eq? (system-type) 'windows) "Consolas" "Inconsolata"))
+  (make-object font% size name 'default
                (if italic? 'italic 'normal)
                (if bold? 'bold 'normal)))
+
+(define *ad-hoc-scale* (if (eq? (system-type) 'windows) 1.3 1))
 
 (define fonts
   (vector (mkf #f #f)
@@ -124,7 +129,7 @@
 
   (for/fold [(y-offset 0)]
             [(row (in-range (screen-rows s)))]
-    (define current-row-height (send dc get-char-height))
+    (define current-row-height (* *ad-hoc-scale* (send dc get-char-height)))
     (define x-offset 0)
     (let loop ((col 0)
                (acc-rev '())
@@ -168,7 +173,7 @@
   (define dc (send canvas get-dc))
   (send dc set-font (vector-ref fonts 0))
   (define-values (rows columns)
-    (values (- (inexact->exact (floor (/ height (send dc get-char-height)))) 0)
+    (values (- (inexact->exact (floor (/ height (* *ad-hoc-scale* (send dc get-char-height))))) 0)
             (- (inexact->exact (floor (/ width (send dc get-char-width)))) 0)))
   (set-gui-screen! g (make-screen rows columns tty-default-pen))
   g)

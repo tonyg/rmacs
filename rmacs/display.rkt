@@ -55,7 +55,7 @@
 (require racket/match)
 (require racket/generic)
 (require (only-in racket/vector vector-copy))
-(require (prefix-in ansi: (only-in ansi
+(require (prefix-in ansi: (only-in ansi/ansi
                                    color-black
                                    color-red
                                    color-green
@@ -64,7 +64,7 @@
                                    color-magenta
                                    color-cyan
                                    color-white)))
-(require (only-in ansi struct:key key key? key-value key-modifiers))
+(require (only-in ansi/lcd-terminal struct:key key key? key-value key-modifiers))
 
 ;; A Color is a Nat. TODO: better color abstraction.
 

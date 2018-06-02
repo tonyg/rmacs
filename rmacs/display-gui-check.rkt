@@ -6,6 +6,7 @@
 (define-runtime-path here ".")
 
 (when (and (or (eq? (system-type) 'macosx)
+      	       (eq? (system-type) 'windows)
                (getenv "DISPLAY"))
            (not (getenv "RMACS_NO_GUI")))
   (dynamic-require (build-path here "display-gui.rkt") #f))
